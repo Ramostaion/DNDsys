@@ -1,0 +1,2 @@
+ALTER TABLE "Room" ADD COLUMN "permissionMode" TEXT NOT NULL DEFAULT 'MIXED';
+ALTER TABLE "Room" ADD COLUMN "permissionSettings" JSONB NOT NULL DEFAULT '{}'::jsonb;

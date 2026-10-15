@@ -1,0 +1,47 @@
+.dice-stage{position:relative;isolation:isolate;overflow:hidden;border:1px solid #a67b43;border-radius:14px;background:radial-gradient(ellipse at 50% 25%,#64503555,transparent 65%),linear-gradient(145deg,#1c2528,#0c1318);box-shadow:inset 0 0 35px #0007,0 10px 24px #0003}
+.dice-stage::before{content:"";position:absolute;inset:34px 8% 25px;border:1px solid #c9a15b22;border-radius:50%;pointer-events:none;background:radial-gradient(ellipse,transparent 53%,#c9a15b0d 54%,transparent 55%)}
+.dice-stage-heading{position:relative;display:flex;justify-content:space-between;gap:8px;padding:12px 15px 0;color:#dfbd82;font-size:11px;letter-spacing:.1em}
+.dice-stage-heading span:last-child{color:#aaa391;letter-spacing:0}
+.dice-table{position:relative;display:flex;flex-wrap:wrap;justify-content:center;padding:12px 8px 0;min-height:134px}
+.dice-no-dice{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;color:#ddb979;font-size:36px}.dice-no-dice span{font-size:12px;color:#b5a181}
+.die-seat{position:relative;width:96px;height:124px;flex:none}
+.die-space{height:96px;perspective:650px;perspective-origin:50% 25%;position:relative}
+.die-flight,.die-tumble,.die-orientation{position:absolute;top:50%;left:50%;width:0;height:0;transform-style:preserve-3d}
+.die-tumble{transform:rotateX(-16deg) rotateY(20deg) rotateZ(var(--die-tilt))}
+.die-face{position:absolute;top:-44px;left:-44px;width:88px;height:88px;display:grid;place-items:center;backface-visibility:hidden;color:#fff1ce;box-shadow:inset 0 0 24px #2a170f55}
+.die-face::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,#fff6 0%,transparent 30%,transparent 70%,#fff2 100%);pointer-events:none}
+.die-face span{position:relative;font:700 17px Georgia,serif;text-shadow:0 1px 1px #24140c,0 0 8px #fff1;border-bottom:1px solid #f4db9f44;line-height:1.2;padding:0 2px}
+.die-face-result{color:#fff6dc}
+.die-shadow{position:absolute;width:66px;height:18px;left:15px;top:79px;border-radius:50%;background:radial-gradient(ellipse,#000a,transparent 70%);transform:scale(1.15)}
+.die-label{position:absolute;bottom:4px;left:0;right:0;text-align:center;color:#b5a181;font-size:10px;letter-spacing:.1em}
+.die-label strong{display:inline-block;margin-left:6px;color:#ffe2ab;font:700 15px Georgia,serif;letter-spacing:0}
+.dice-stage-caption{position:relative;text-align:center;padding:4px 12px 12px;color:#a89f8f;font-size:11px;min-height:32px}
+.dice-stage.is-rolling .die-tumble{animation:die-spin .85s linear infinite}
+.dice-stage.is-rolling .die-flight{animation:die-hover .65s ease-in-out infinite alternate;animation-delay:var(--die-delay)}
+.dice-stage.is-rolling .die-shadow{animation:die-shadow-hover .65s ease-in-out infinite alternate;animation-delay:var(--die-delay)}
+.dice-stage.is-landing .die-tumble{animation:die-settle 1.1s cubic-bezier(.18,.65,.24,1) both;animation-delay:var(--die-delay)}
+.dice-stage.is-landing .die-flight{animation:die-bounce 1.1s ease-out both;animation-delay:var(--die-delay)}
+.dice-stage.is-landing .die-shadow{animation:die-shadow-land 1.1s ease-out both;animation-delay:var(--die-delay)}
+.dice-stage.is-landing::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;box-shadow:inset 0 0 28px #efbc6644;animation:die-glow 1.6s ease-out both}
+.dice-motion-toggle{display:flex;align-items:center;justify-content:flex-end;gap:6px;color:#bca987;font-size:11px;cursor:pointer}.dice-motion-toggle input{accent-color:#d7ac63}
+.dice-stage.is-still *,.dice-stage.is-still::after{animation:none!important}
+.dice-stage.is-compact{flex:none;width:190px;border:0;border-radius:9px;box-shadow:inset 0 0 18px #0004;background:radial-gradient(ellipse,#b2844222,transparent 75%)}
+.dice-stage.is-compact::before{inset:8px 6px;border-radius:50%}
+.dice-stage.is-compact .dice-stage-heading,.dice-stage.is-compact .dice-stage-caption{display:none}
+.dice-stage.is-compact .dice-table{padding:4px 0 0;min-height:90px}
+.dice-stage.is-compact .die-seat{width:60px;height:86px}
+.dice-stage.is-compact .die-space{height:68px;transform:scale(.7);transform-origin:center center}
+.dice-stage.is-compact .die-shadow{width:46px;height:12px;left:7px;top:58px}
+.dice-stage.is-compact .die-label{font-size:9px;letter-spacing:0}
+.dice-stage.is-compact .die-label strong{font-size:12px;margin-left:4px}
+.dice-stage.is-compact .dice-no-dice{min-height:76px;font-size:25px}
+.dice-stage.is-compact .dice-no-dice span{font-size:10px;max-width:140px;text-align:center}
+@keyframes die-spin{from{transform:rotateX(0deg) rotateY(0deg) rotateZ(var(--die-tilt))}to{transform:rotateX(360deg) rotateY(720deg) rotateZ(var(--die-tilt))}}
+@keyframes die-hover{from{transform:translateY(-8px)}to{transform:translateY(4px)}}
+@keyframes die-shadow-hover{from{transform:scale(.65);opacity:.35}to{transform:scale(1.15);opacity:1}}
+@keyframes die-settle{0%{transform:rotateX(540deg) rotateY(720deg) rotateZ(140deg)}75%{transform:rotateX(-26deg) rotateY(28deg) rotateZ(-5deg)}100%{transform:rotateX(-16deg) rotateY(20deg) rotateZ(var(--die-tilt))}}
+@keyframes die-bounce{0%{transform:translateY(-30px)}38%{transform:translateY(6px)}58%{transform:translateY(-12px)}78%{transform:translateY(3px)}90%{transform:translateY(-3px)}100%{transform:translateY(0)}}
+@keyframes die-shadow-land{0%{transform:scale(.45);opacity:.2}38%{transform:scale(1.35);opacity:1}58%{transform:scale(.8);opacity:.5}100%{transform:scale(1.15);opacity:1}}
+@keyframes die-glow{0%,40%{opacity:0}65%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.dice-stage *,.dice-stage::after{animation:none!important}}
+@media(max-width:480px){.die-seat{width:88px}.dice-stage-heading{font-size:10px;letter-spacing:0}}

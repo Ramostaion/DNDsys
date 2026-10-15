@@ -1,0 +1,86 @@
+import { beforeEach, describe, it, expect } from 'vitest';
+import { useUI } from './store';
+describe('浮窗管理器', () => {
+  beforeEach(() => useUI.setState({ windows: [], topZ: 10, closeGuards: {} }));
+  it('关闭中间窗口后，新窗口不会完全覆盖已有窗口的标题位置', () => {
+    const state = useUI.getState();
+    state.open('characters');
+    state.open('character', 'hero');
+    const [directory, character] = useUI.getState().windows;
+    state.close(directory.id);
+    state.open('inventory', 'hero');
+    const inventory = useUI.getState().windows.find((win) => win.type === 'inventory')!;
+    expect({ x: inventory.x, y: inventory.y }).not.toEqual({ x: character.x, y: character.y });
+  });
+  it('同一功能再次切换关闭，只关闭对应窗口，普通打开仍保持聚焦', () => {
+    const state = useUI.getState();
+    state.toggle('characters');
+    state.open('character', 'hero');
+    state.toggle('dice');
+    const win = useUI.getState().windows.find((w) => w.type === 'characters')!;
+    state.open('characters');
+    expect(useUI.getState().windows).toHaveLength(3);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)?.z).toBe(useUI.getState().topZ);
+    state.toggle('characters');
+    expect(useUI.getState().windows.map((w) => w.type)).toEqual(['character', 'dice']);
+    state.toggle('characters');
+    expect(useUI.getState().windows).toHaveLength(3);
+  });
+  it('切换最小化窗口会恢复位置尺寸，之后再次切换才关闭', () => {
+    const state = useUI.getState();
+    state.toggle('dice');
+    const win = useUI.getState().windows[0];
+    state.move(win.id, 240, 180);
+    state.resize(win.id, 600, 500);
+    state.minimize(win.id);
+    state.toggle('dice');
+    expect(useUI.getState().windows).toHaveLength(1);
+    expect(useUI.getState().windows[0]).toMatchObject({ id: win.id, minimized: false, x: 240, y: 180, w: 600, h: 500 });
+    state.toggle('dice');
+    expect(useUI.getState().windows).toHaveLength(0);
+  });
+  it('再次切换仍遵守草稿关闭保护，并精确匹配独立实体窗口', () => {
+    const state = useUI.getState();
+    state.toggle('tag-library');
+    state.open('tag-detail', 'first');
+    state.open('tag-detail', 'second');
+    const win = useUI.getState().windows[0];
+    state.setCloseGuard(win.id, () => false);
+    state.toggle('tag-library');
+    expect(useUI.getState().windows).toHaveLength(3);
+    state.setCloseGuard(win.id, () => true);
+    state.toggle('tag-library');
+    expect(useUI.getState().closeGuards[win.id]).toBeUndefined();
+    state.toggle('tag-detail', 'first');
+    expect(useUI.getState().windows.map((w) => w.entityId)).toEqual(['second']);
+  });
+  it('打开、移动、缩放、最小化、恢复和关闭', () => {
+    const state = useUI.getState();
+    state.open('characters');
+    const win = useUI.getState().windows.at(-1)!;
+    state.move(win.id, 200, 150);
+    state.resize(win.id, 600, 500);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)).toMatchObject({ x: 200, y: 150, w: 600, h: 500 });
+    state.minimize(win.id);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)?.minimized).toBe(true);
+    state.focus(win.id);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)?.minimized).toBe(false);
+    state.close(win.id);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)).toBeUndefined();
+  });
+  it('拒绝关闭时保留备注窗口，确认后清理保护回调', () => {
+    const state = useUI.getState();
+    state.open('tag-detail', 'test-tag');
+    const win = useUI.getState().windows.at(-1)!;
+    state.setCloseGuard(win.id, () => false);
+    state.close(win.id);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)).toBeDefined();
+    state.minimize(win.id);
+    state.focus(win.id);
+    expect(useUI.getState().closeGuards[win.id]).toBeDefined();
+    state.setCloseGuard(win.id, () => true);
+    state.close(win.id);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)).toBeUndefined();
+    expect(useUI.getState().closeGuards[win.id]).toBeUndefined();
+  });
+});

@@ -1,0 +1,1 @@
+ALTER TABLE "Quest" ADD COLUMN "privateNote" TEXT NOT NULL DEFAULT '';

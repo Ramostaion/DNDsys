@@ -1,0 +1,527 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+model User {
+  id String @id @default(cuid())
+  username String @unique
+  passwordHash String
+  sessionVersion Int @default(0)
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  lastLoginAt DateTime?
+  roomsOwned Room[] @relation("RoomOwner")
+  memberships RoomMember[]
+  characters Character[] @relation("CharacterOwner")
+  operations OperationReceipt[]
+  logs ActivityLog[]
+  diceRolls DiceRoll[]
+  combatEvents CombatEvent[]
+}
+model Room {
+  id String @id @default(cuid())
+  name String
+  description String @default("")
+  inviteCode String @unique
+  ownerId String
+  owner User @relation("RoomOwner", fields:[ownerId], references:[id])
+  status String @default("PREPARING")
+  activeMapId String?
+  rules Json
+  sheetSchema Json @default("[]")
+  sheetMode Boolean @default(false)
+  permissionMode String @default("MIXED")
+  permissionSettings Json @default("{}")
+  equipmentSlots Json @default("[\"主手\",\"副手\",\"头部\",\"胸部\",\"手臂\",\"手部\",\"腿部\",\"鞋\",\"饰品1\",\"饰品2\",\"饰品3\",\"饰品4\"]")
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  members RoomMember[]
+  publicDiceAvailableAt DateTime?
+  characters Character[]
+  maps Map[]
+  items ItemDefinition[]
+  templates Template[]
+  quests Quest[]
+  drawings DrawingOperation[]
+  drawingHistory DrawingHistory[]
+  logs ActivityLog[]
+  receipts OperationReceipt[]
+  encounters CombatEncounter[]
+  diceRolls DiceRoll[]
+  combatEvents CombatEvent[]
+  trades TradeRequest[]
+  presentationAssets PresentationAsset[]
+  presentationSession PresentationSession?
+  presentationGroups PresentationGroup[]
+  presentationCues PresentationCue[]
+  tagDefinitions TagDefinition[]
+  characterTags CharacterTag[]
+  privateClues PrivateClue[]
+  clueDeliveries ClueDelivery[]
+  clueAttachments ClueAttachment[]
+  @@index([ownerId])
+}
+
+model PrivateClue {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  senderUserId String
+  senderName String
+  sharedByUserId String?
+  sharedByName String?
+  rootClueId String?
+  title String
+  bodyMarkdown String @default("")
+  gmNote String @default("")
+  characterLabel String @default("")
+  allowForward Boolean @default(false)
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  deliveries ClueDelivery[]
+  attachments ClueAttachmentLink[]
+  @@index([roomId,senderUserId,createdAt])
+  @@index([rootClueId])
+}
+
+model ClueDelivery {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  clueId String
+  clue PrivateClue @relation(fields:[clueId],references:[id],onDelete:Cascade)
+  recipientUserId String
+  readAt DateTime?
+  savedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([clueId,recipientUserId])
+  @@index([roomId,recipientUserId,createdAt])
+}
+
+model ClueAttachment {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  uploadedByUserId String
+  filename String
+  storageName String
+  thumbName String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  clues ClueAttachmentLink[]
+  @@index([roomId,uploadedByUserId])
+}
+
+model ClueAttachmentLink {
+  clueId String
+  attachmentId String
+  sortOrder Int @default(0)
+  clue PrivateClue @relation(fields:[clueId],references:[id],onDelete:Cascade)
+  attachment ClueAttachment @relation(fields:[attachmentId],references:[id],onDelete:Restrict)
+  @@id([clueId,attachmentId])
+  @@index([attachmentId])
+}
+model RoomMember {
+  roomId String
+  userId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  role String @default("PLAYER")
+  permissions Json @default("{}")
+  joinedAt DateTime @default(now())
+  @@id([roomId,userId])
+  @@index([userId])
+}
+model Character {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  ownerId String?
+  owner User? @relation("CharacterOwner",fields:[ownerId],references:[id],onDelete:SetNull)
+  name String
+  visibility String @default("PUBLIC")
+  isNpc Boolean @default(false)
+  allowSearch Boolean @default(true)
+  avatarUrl String?
+  description String @default("")
+  level Int @default(1)
+  xp Int @default(0)
+  currentHp Int @default(0)
+  attributes Json @default("{}")
+  formulas Json @default("[]")
+  fields Json @default("[]")
+  fieldValues Json @default("{}")
+  skills Json @default("[]")
+  statuses Json @default("[]")
+  traits Json @default("[]")
+  inventorySlots Int @default(24)
+  derived Json @default("{}")
+  attackProfiles Json @default("[]")
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  inventory InventoryEntry[]
+  equipment EquippedItem[]
+  tokens MapToken[]
+  combatants Combatant[]
+  attackRolls DiceRoll[] @relation("AttackRolls")
+  combatEventsAsActor CombatEvent[] @relation("CombatEventActor")
+  combatEventsAsTarget CombatEvent[] @relation("CombatEventTarget")
+  characterTags CharacterTag[]
+  @@unique([id,roomId])
+  @@index([roomId])
+  @@index([ownerId])
+}
+model Map {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  parentId String?
+  parent Map? @relation("MapTree",fields:[parentId],references:[id],onDelete:SetNull)
+  children Map[] @relation("MapTree")
+  name String
+  visibility String @default("PUBLIC")
+  imageUrl String?
+  width Int @default(1600)
+  height Int @default(900)
+  scalePixels Float @default(100)
+  scaleUnits Float @default(5)
+  version Int @default(0)
+  portals MapPortal[] @relation("PortalSource")
+  targetPortals MapPortal[] @relation("PortalTarget")
+  tokens MapToken[]
+  drawings DrawingOperation[]
+  drawingHistory DrawingHistory[]
+  @@index([roomId,parentId])
+}
+model MapPortal {
+  id String @id @default(cuid())
+  sourceMapId String
+  targetMapId String
+  source Map @relation("PortalSource",fields:[sourceMapId],references:[id],onDelete:Cascade)
+  target Map @relation("PortalTarget",fields:[targetMapId],references:[id],onDelete:Cascade)
+  label String
+  x Float
+  y Float
+  @@index([sourceMapId])
+}
+model MapToken {
+  id String @id @default(cuid())
+  mapId String
+  characterId String
+  map Map @relation(fields:[mapId],references:[id],onDelete:Cascade)
+  character Character @relation(fields:[characterId],references:[id],onDelete:Cascade)
+  visibility String @default("PUBLIC")
+  x Float
+  y Float
+  version Int @default(0)
+  @@index([mapId])
+  @@index([characterId,mapId])
+}
+model Template {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  kind String
+  name String
+  description String @default("")
+  iconUrl String?
+  data Json @default("{}")
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  @@index([roomId,kind])
+}
+model ItemDefinition {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  name String
+  kind String @default("杂物")
+  description String @default("")
+  imageUrl String?
+  data Json @default("{}")
+  compatibleSlots Json @default("[]")
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  inventory InventoryEntry[]
+  @@index([roomId])
+}
+model InventoryEntry {
+  id String @id @default(cuid())
+  characterId String
+  itemId String
+  character Character @relation(fields:[characterId],references:[id],onDelete:Cascade)
+  item ItemDefinition @relation(fields:[itemId],references:[id],onDelete:Restrict)
+  quantity Int @default(1)
+  position Int
+  data Json @default("{}")
+  version Int @default(0)
+  equipped EquippedItem[]
+  @@unique([characterId,position])
+  @@index([itemId])
+}
+model EquippedItem {
+  id String @id @default(cuid())
+  characterId String
+  entryId String
+  slot String
+  character Character @relation(fields:[characterId],references:[id],onDelete:Cascade)
+  entry InventoryEntry @relation(fields:[entryId],references:[id],onDelete:Cascade)
+  @@unique([characterId,slot])
+  @@unique([entryId,slot])
+}
+model Quest {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  name String
+  description String @default("")
+  privateNote String @default("")
+  status String @default("OPEN")
+  progress Int @default(0)
+  stageIndex Int @default(0)
+  stages Json @default("[]")
+  isPublic Boolean @default(true)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([roomId])
+}
+model DrawingOperation {
+  id String @id @default(cuid())
+  roomId String
+  mapId String
+  authorId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  map Map @relation(fields:[mapId],references:[id],onDelete:Cascade)
+  kind String
+  data Json
+  undone Boolean @default(false)
+  historyId String?
+  createdAt DateTime @default(now())
+  @@index([mapId,createdAt])
+}
+model DrawingHistory {
+  id String @id @default(cuid())
+  roomId String
+  mapId String
+  userId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  map Map @relation(fields:[mapId],references:[id],onDelete:Cascade)
+  state String @default("APPLIED")
+  changes Json
+  createdAt DateTime @default(now())
+  @@index([roomId,userId,mapId,state,createdAt])
+}
+model ActivityLog {
+  id String @id @default(cuid())
+  roomId String
+  userId String?
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  user User? @relation(fields:[userId],references:[id],onDelete:SetNull)
+  action String
+  entityId String?
+  data Json @default("{}")
+  createdAt DateTime @default(now())
+  @@index([roomId,createdAt])
+}
+model OperationReceipt {
+  id String @id
+  roomId String
+  userId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  result Json
+  createdAt DateTime @default(now())
+  @@index([roomId,userId])
+}
+
+model DiceRoll {
+  id String @id @default(cuid())
+  roomId String
+  userId String
+  rollerName String @default("")
+  rollerRole String @default("PLAYER")
+  characterId String?
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  character Character? @relation("AttackRolls",fields:[characterId],references:[id],onDelete:SetNull)
+  expression String
+  reason String @default("")
+  total Int
+  details Json
+  visibility String @default("PUBLIC")
+  createdAt DateTime @default(now())
+  @@index([roomId,createdAt])
+}
+
+model CombatEncounter {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  status String @default("ACTIVE")
+  round Int @default(1)
+  turnIndex Int @default(0)
+  version Int @default(0)
+  startedAt DateTime @default(now())
+  endedAt DateTime?
+  combatants Combatant[]
+  events CombatEvent[]
+  @@index([roomId,status])
+}
+
+model Combatant {
+  id String @id @default(cuid())
+  encounterId String
+  characterId String
+  encounter CombatEncounter @relation(fields:[encounterId],references:[id],onDelete:Cascade)
+  character Character @relation(fields:[characterId],references:[id],onDelete:Cascade)
+  initiative Int
+  sortOrder Int @default(0)
+  @@unique([encounterId,characterId])
+  @@index([encounterId,initiative])
+}
+
+model CombatEvent {
+  id String @id @default(cuid())
+  roomId String
+  encounterId String?
+  userId String
+  actorId String?
+  targetId String?
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  encounter CombatEncounter? @relation(fields:[encounterId],references:[id],onDelete:SetNull)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  actor Character? @relation("CombatEventActor",fields:[actorId],references:[id],onDelete:SetNull)
+  target Character? @relation("CombatEventTarget",fields:[targetId],references:[id],onDelete:SetNull)
+  kind String
+  visibility String @default("PUBLIC")
+  data Json
+  createdAt DateTime @default(now())
+  @@index([roomId,createdAt])
+  @@index([encounterId,createdAt])
+}
+
+model TradeRequest {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  senderId String
+  sourceOwnerId String?
+  recipientId String
+  sourceCharacterId String
+  targetCharacterId String
+  entryId String
+  itemId String
+  quantity Int
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([roomId,status])
+  @@index([recipientId,status])
+}
+
+model PresentationAsset {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  storageName String
+  screenName String
+  thumbName String
+  title String
+  caption String @default("")
+  gmNotes String @default("")
+  tags Json @default("[]")
+  groupId String?
+  group PresentationGroup? @relation(fields:[groupId],references:[id],onDelete:SetNull)
+  sortOrder Int @default(0)
+  canReplay Boolean @default(false)
+  revealedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cues PresentationCue[]
+  @@index([roomId,sortOrder])
+}
+
+model PresentationSession {
+  roomId String @id
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  status String @default("idle")
+  activeAssetId String?
+  activeCueId String?
+  transition String @default("none")
+  requestedMode String @default("floating")
+  allowHistory Boolean @default(false)
+  revision Int @default(0)
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+model PresentationGroup {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  name String
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  assets PresentationAsset[]
+  cues PresentationCue[]
+  @@index([roomId,sortOrder])
+}
+
+model PresentationCue {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  assetId String
+  asset PresentationAsset @relation(fields:[assetId],references:[id],onDelete:Cascade)
+  groupId String?
+  group PresentationGroup? @relation(fields:[groupId],references:[id],onDelete:SetNull)
+  sortOrder Int @default(0)
+  transition String @default("none")
+  captionOverride String?
+  createdAt DateTime @default(now())
+  @@index([roomId,sortOrder])
+}
+
+model TagDefinition {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  name String
+  icon String @default("clue")
+  color String @default("#c69452")
+  templateDescription String @default("")
+  defaultVisibility String @default("GM_ONLY")
+  defaultPriority Int @default(0)
+  isArchived Boolean @default(false)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  characterTags CharacterTag[]
+  @@unique([id,roomId])
+  @@index([roomId,isArchived])
+}
+
+model CharacterTag {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  characterId String
+  character Character @relation(fields:[characterId,roomId],references:[id,roomId],onDelete:Cascade)
+  tagDefinitionId String
+  definition TagDefinition @relation(fields:[tagDefinitionId,roomId],references:[id,roomId],onDelete:Restrict)
+  detailsMarkdown String @default("")
+  visibility String @default("GM_ONLY")
+  priority Int @default(0)
+  sortOrder Int @default(0)
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([characterId,tagDefinitionId])
+  @@index([roomId,characterId])
+  @@index([tagDefinitionId])
+}

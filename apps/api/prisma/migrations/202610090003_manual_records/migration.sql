@@ -1,0 +1,1 @@
+ALTER TABLE "CombatEvent" ADD COLUMN "visibility" TEXT NOT NULL DEFAULT 'PUBLIC';

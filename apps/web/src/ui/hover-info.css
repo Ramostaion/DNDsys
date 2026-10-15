@@ -1,0 +1,5 @@
+.hover-info{position:relative;display:inline-flex;align-items:center}
+.hover-info-text{position:absolute;z-index:5;right:0;top:calc(100% + 6px);width:270px;max-width:65vw;padding:10px 12px;border:1px solid #57677b;border-radius:8px;background:#142130;color:#e1e8f0;box-shadow:0 8px 24px #0008;font-size:12px;line-height:1.6;white-space:normal;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
+.hover-info:hover>.hover-info-text,.hover-info:focus-within>.hover-info-text{visibility:visible;opacity:1}
+.npc-search-control .hover-info-text{left:0;right:auto}
+@media(prefers-reduced-motion:reduce){.hover-info-text{transition:none}}

@@ -1,0 +1,9 @@
+.agility-bonus-trigger{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:4px;padding:0;vertical-align:middle;border:0;border-radius:50%;background:transparent;color:#b9cfea;cursor:help}
+.agility-bonus-trigger:hover,.agility-bonus-trigger:focus-visible{color:#f3d493;background:#ffffff12;outline:1px solid #e0bb7588}
+.agility-bonus-tooltip{position:fixed;z-index:15000;width:340px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:12px 14px;border:1px solid #73879a;border-radius:8px;background:#142130;color:#e1e8f0;box-shadow:0 8px 28px #0009;font-size:12px;line-height:1.5;white-space:normal}
+.agility-bonus-tooltip strong{display:block;font-size:13px;color:#e9d7ad}
+.agility-bonus-tooltip table{width:100%;margin:8px 0;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.agility-bonus-tooltip th,.agility-bonus-tooltip td{padding:1px 6px;text-align:left;border-bottom:1px solid #ffffff0d}
+.agility-bonus-tooltip th:last-child,.agility-bonus-tooltip td:last-child{text-align:right}
+.agility-bonus-tooltip .is-current{background:#a4863833;color:#ffe0a3}
+.agility-bonus-tooltip p{margin:5px 0;overflow-wrap:anywhere}

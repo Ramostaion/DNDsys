@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>DND 二十面骰</title>
+  <rect width="64" height="64" rx="14" fill="#151820" />
+  <g stroke="#e6bb68" stroke-width="1.8" stroke-linejoin="round">
+    <path d="M32 5 56 19 56 45 32 59 8 45 8 19Z" fill="#72552b" />
+    <path d="M32 5 32 19 8 19Z" fill="#bd8d44" />
+    <path d="M32 5 56 19 32 19Z" fill="#946a34" />
+    <path d="M8 19 32 19 19 43Z" fill="#8f6933" />
+    <path d="M56 19 45 43 32 19Z" fill="#624727" />
+    <path d="M8 19 19 43 8 45Z" fill="#bd8d44" />
+    <path d="M56 19 56 45 45 43Z" fill="#916831" />
+    <path d="M8 45 19 43 32 59Z" fill="#624727" />
+    <path d="M56 45 32 59 45 43Z" fill="#72552b" />
+    <path d="M19 43 45 43 32 59Z" fill="#946a34" />
+    <path d="M32 19 45 43 19 43Z" fill="#27211b" />
+  </g>
+  <text x="32" y="39" fill="#ffe4aa" font-family="Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle">20</text>
+</svg>

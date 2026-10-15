@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+uploads
+.launcher
+.local-database
+test-results
+playwright-report

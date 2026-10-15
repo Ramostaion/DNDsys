@@ -1,0 +1,48 @@
+{
+  "name": "@dnd/api",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run src",
+    "smoke:v3": "node scripts/v3-smoke.mjs",
+    "smoke:presentation": "node scripts/presentation-smoke.mjs",
+    "smoke:tags": "node scripts/character-tags-smoke.mjs",
+    "prisma": "prisma",
+    "seed": "tsx prisma/seed.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@dnd/shared": "workspace:*",
+    "@prisma/client": "^6.16.3",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "prisma": "^6.16.3",
+    "sharp": "^0.35.5",
+    "socket.io": "^4.8.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "files": [
+    "dist",
+    "prisma"
+  ]
+}
