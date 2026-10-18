@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
-import { characterAgility, resolveAgilityContest, rollDice, type AgilityContest } from '@dnd/shared';
+import { characterAttribute, resolveAgilityContest, rollDice, type AgilityContest } from '@dnd/shared';
 import { refreshCharacter } from './character-values.js';
 import { rulesOf } from './data.js';
 import { sheetFields } from './operations/helpers.js';
@@ -15,6 +15,7 @@ export async function adjudicateAgility(
     operationId: string;
     isGM: boolean;
     privateRecord: boolean;
+    actorAttribute?: string;
   },
   random: (sides: number) => number = (sides) => randomInt(1, sides + 1),
 ): Promise<{ contest?: AgilityContest; skippedReason?: string }> {
@@ -32,13 +33,18 @@ export async function adjudicateAgility(
   for (const id of [args.actorId, args.targetId]) {
     const derived = await refreshCharacter(tx, id, rules);
     const character = await tx.character.findFirstOrThrow({ where: { id, roomId: args.roomId } });
-    const resolution = characterAgility({ ...character, derived }, fields, room.sheetMode);
+    const resolution = characterAttribute(
+      { ...character, derived },
+      fields,
+      room.sheetMode,
+      id === args.actorId ? args.actorAttribute : '敏捷',
+    );
     if (!resolution.agility) return { skippedReason: `${character.name}：${resolution.reason}，已保存普通行动记录。` };
     participants.push({ character, agility: resolution.agility });
   }
   const privateAttributes = participants.some(({ agility }) => agility.visibility !== 'ALL');
   if (!args.isGM && privateAttributes)
-    return { skippedReason: '双方敏捷需为公开字段，私密属性对抗请由 GM 记录；已保存普通行动记录。' };
+    return { skippedReason: '双方判定词条需为公开字段，私密属性对抗请由 GM 记录；已保存普通行动记录。' };
   const scope =
     args.privateRecord || privateAttributes || participants.some(({ character }) => character.visibility === 'GM')
       ? 'GM'

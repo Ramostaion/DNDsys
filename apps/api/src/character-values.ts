@@ -22,6 +22,7 @@ export function characterDerived(
     traits: unknown;
     statuses?: unknown;
     fieldValues?: unknown;
+    characterTags?: { id: string; customFields: unknown; definition: { name: string } }[];
     equipment: { entry: { data?: unknown; item: { name?: string; kind?: string; data: unknown } } }[];
   },
   rules: RuleConfig,
@@ -30,6 +31,18 @@ export function characterDerived(
 ) {
   sheetFields = withShieldFields(sheetFields);
   const attrs = object(character.attributes);
+  const states = (character.characterTags || []).map((tag) => ({
+    id: `state:${tag.id}`,
+    name: tag.definition.name,
+    customFields: array(tag.customFields).filter(
+      (field) => typeof field.name === 'string' && typeof field.value === 'number' && Number.isFinite(field.value),
+    ),
+  }));
+  const inventoryBonus = character.equipment.reduce((sum, equipped) => {
+    if (equipped.entry.item.kind !== '背包') return sum;
+    const value = array(object(equipped.entry.item.data).customFields).find((field) => field.name === '格数')?.value;
+    return sum + (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0);
+  }, 0);
   const base: Record<string, number> = { 等级: character.level };
   for (const [key, value] of Object.entries(attrs))
     if (typeof value === 'number' && Number.isFinite(value)) base[key] = value;
@@ -45,6 +58,7 @@ export function characterDerived(
     string,
     { amount: number; source: string; kind?: 'equipment' | 'trait' | 'buff'; instanceId?: string; itemKind?: string }[]
   > = {};
+  const formulaKeys = new Set(['血量上限', '防御', ...array(character.formulas).map((f) => f.key)]);
   const numericItems = (item: { kind?: string; data: unknown }) =>
     isWearable(item.kind || '')
       ? array(object(item.data).customFields).filter(
@@ -54,7 +68,7 @@ export function characterDerived(
   for (const equipped of character.equipment)
     for (const field of numericItems(equipped.entry.item)) {
       const key = field.name.trim();
-      if (typeof attrs[key] === 'number')
+      if (typeof base[key] === 'number' || formulaKeys.has(key))
         (modifiers[key] ??= []).push({
           amount: field.value,
           source: String(object(equipped.entry.data).name || equipped.entry.item.name || '装备'),
@@ -62,6 +76,12 @@ export function characterDerived(
           instanceId: String((equipped as any).id || ''),
           itemKind: equipped.entry.item.kind,
         });
+    }
+  for (const state of states)
+    for (const field of state.customFields) {
+      const key = field.name.trim();
+      if (typeof base[key] === 'number' || formulaKeys.has(key))
+        (modifiers[key] ??= []).push({ amount: field.value, source: state.name, kind: 'buff', instanceId: state.id });
     }
   for (const effect of [...array(character.traits), ...array(character.statuses)].filter(
     (effect) => effect.enabled !== false,
@@ -98,7 +118,7 @@ export function characterDerived(
         },
       ]),
   );
-  if (!sheetFields.length && !sheetMode) return { ...legacy, breakdown: legacyBreakdown };
+  if (!sheetFields.length && !sheetMode) return { ...legacy, breakdown: legacyBreakdown, inventoryBonus };
   const sheetModifiers: SheetModifier[] = [];
   const addModifiers = (
     data: unknown,
@@ -164,6 +184,19 @@ export function characterDerived(
       if (effect.enabled === false) continue;
       addModifiers(effect, kind, String(effect.id), String(effect.name || kind));
     }
+  for (const state of states)
+    for (const [index, field] of state.customFields.entries()) {
+      const matches = sheetFields.filter((target) => target.name.trim() === field.name.trim());
+      if (matches.length === 1 && matches[0].type === 'number')
+        sheetModifiers.push({
+          id: `${state.id}:custom:${index}`,
+          targetFieldId: matches[0].fieldId,
+          operation: 'ADD',
+          value: field.value,
+          enabled: true,
+          source: { kind: 'buff', instanceId: state.id, name: state.name },
+        });
+    }
   const sheet = calculateSheet(sheetFields, object(character.fieldValues), sheetModifiers);
   const result = sheetMode
     ? sheet
@@ -176,6 +209,7 @@ export function characterDerived(
   const agility = characterAgility({ ...character, derived: result }, sheetFields, sheetMode).agility;
   return {
     ...result,
+    inventoryBonus,
     ...(agility
       ? { agility, values: { 当前有效敏捷: agility.effective, 敏捷属性加值: agility.bonus, ...result.values } }
       : {}),
@@ -184,7 +218,11 @@ export function characterDerived(
 export async function refreshCharacter(tx: Prisma.TransactionClient, characterId: string, rules: RuleConfig) {
   const character = await tx.character.findUniqueOrThrow({
     where: { id: characterId },
-    include: { room: true, equipment: { include: { entry: { include: { item: true } } } } },
+    include: {
+      room: true,
+      characterTags: { include: { definition: true } },
+      equipment: { include: { entry: { include: { item: true } } } },
+    },
   });
   const derived = characterDerived(
     character,

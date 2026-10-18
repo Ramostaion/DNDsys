@@ -2,7 +2,7 @@ import type express from 'express';
 import { randomBytes } from 'node:crypto';
 import type { Prisma as PrismaType } from '@prisma/client';
 import { z } from 'zod';
-import { DEFAULT_RULES, DEFAULT_EQUIPMENT_SLOTS, withShieldFields } from '@dnd/shared';
+import { DEFAULT_RULES, DEFAULT_EQUIPMENT_SLOTS, withBackpackSlot, withShieldFields } from '@dnd/shared';
 import { object, rulesOf } from '../data.js';
 import { refreshCharacter } from '../character-values.js';
 import { snapshot } from '../snapshot.js';
@@ -10,6 +10,7 @@ import { asyncRoute, fail } from '../http.js';
 import { requireGM } from '../access.js';
 import type { RouteContext } from './context.js';
 import { deleteOwnedRoom, removeRoomUploads } from '../room-lifecycle.js';
+import { roomProfileInput } from '../room-member-profile.js';
 
 const ruleSchema = z.object({
   minimumPlayers: z.number().int().min(1).max(8),
@@ -45,7 +46,7 @@ export function registerRoomRoutes(
         include: { _count: { select: { members: true } } },
         orderBy: { createdAt: 'desc' },
       });
-      res.json(rooms);
+      res.json(rooms.map((room) => ({ ...room, initiativePresetId: undefined })));
     }),
   );
   app.post(
@@ -90,7 +91,7 @@ export function registerRoomRoutes(
         await tx.roomMember.create({ data: { roomId: room!.id, userId: req.user!.id, role: 'PLAYER' } });
       });
       emit(room!.id, 'member.joined', { userId: req.user!.id });
-      res.json(room);
+      res.json({ ...room, initiativePresetId: undefined });
     }),
   );
   app.delete(
@@ -116,6 +117,27 @@ export function registerRoomRoutes(
     asyncRoute(async (req, res) => {
       const m = await member(String(req.params.roomId), req.user!.id);
       res.json(await snapshot(db, String(req.params.roomId), req.user!.id, m.role === 'GM'));
+    }),
+  );
+  app.post(
+    '/api/rooms/:roomId/members/me/profile',
+    auth,
+    asyncRoute(async (req, res) => {
+      const roomId = String(req.params.roomId),
+        userId = req.user!.id;
+      await member(roomId, userId);
+      const { displayName } = roomProfileInput.parse(req.body);
+      const result = await db.$transaction(async (tx) => {
+        const updated = await tx.roomMember.update({
+          where: { roomId_userId: { roomId, userId } },
+          data: { displayName: displayName || null },
+          select: { userId: true, displayName: true },
+        });
+        await tx.activityLog.create({ data: { roomId, userId, action: 'member.profile', data: {} } });
+        return updated;
+      });
+      emit(roomId, 'member.profile', { userId });
+      res.json(result);
     }),
   );
   app.post(
@@ -236,6 +258,7 @@ export function registerRoomRoutes(
       const input = z
         .object({ version: z.number().int(), slots: z.array(z.string().trim().min(1).max(40)).min(1).max(30) })
         .parse(req.body);
+      input.slots = withBackpackSlot(input.slots);
       if (new Set(input.slots).size !== input.slots.length) fail(400, '装备部位不能重复');
       const occupied = await db.equippedItem.findMany({
         where: { character: { roomId } },

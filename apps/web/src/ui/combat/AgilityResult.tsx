@@ -19,7 +19,7 @@ function Participant({
       </strong>
       <dl>
         <div>
-          <dt>基础敏捷</dt>
+          <dt>基础{side.attributeName || '敏捷'}</dt>
           <dd>{side.base}</dd>
         </div>
         {side.modifiers.map((change, index) => (
@@ -42,7 +42,7 @@ function Participant({
           </div>
         )}
         <div>
-          <dt>当前有效敏捷</dt>
+          <dt>当前有效{side.attributeName || '敏捷'}</dt>
           <dd>
             {side.effective}
             {side.rawEffective < 1 && '（最低 1）'}
@@ -50,7 +50,7 @@ function Participant({
         </div>
         <div>
           <dt>
-            敏捷属性加值
+            {side.attributeName || '敏捷'}属性加值
             <AgilityBonusInfo side={side} version={version} />
           </dt>
           <dd>
@@ -64,7 +64,7 @@ function Participant({
         </div>
       </dl>
       <p className="tiny text-sky-200 mt-2">
-        敏捷计算：MAX(1, {calculation}) = {side.effective}
+        {side.attributeName || '敏捷'}计算：MAX(1, {calculation}) = {side.effective}
       </p>
       {version === 3 && (
         <p className="tiny text-sky-200 mt-2">
@@ -100,7 +100,7 @@ export default function AgilityResult({ contest, recordId }: { contest: AgilityC
       <p>{contest.reason}</p>
       <p className="tiny subtle">
         {contest.version === 4
-          ? '判定值 = MAX(1, 敏捷属性加值 + D20)。'
+          ? `判定值 = MAX(1, ${contest.attacker.attributeName || '敏捷'}属性加值 + D20)。${contest.attacker.attributeName ? '目标使用敏捷。' : ''}`
           : contest.version === 3
             ? '历史规则：判定值 = 有效敏捷 + 敏捷属性加值 + D20。'
             : contest.version === 2

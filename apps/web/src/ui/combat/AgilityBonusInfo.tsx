@@ -84,7 +84,7 @@ export default function AgilityBonusInfo({
         ref={button}
         type="button"
         className="agility-bonus-trigger"
-        aria-label={`${side.name}的敏捷属性加值说明`}
+        aria-label={`${side.name}的${side.attributeName || '敏捷'}属性加值说明`}
         aria-describedby={open ? id : undefined}
         onPointerEnter={show}
         onPointerLeave={hide}
@@ -111,11 +111,11 @@ export default function AgilityBonusInfo({
             onPointerEnter={cancelHide}
             onPointerLeave={hide}
           >
-            <strong>敏捷属性加值表</strong>
+            <strong>{side.attributeName || '敏捷'}属性加值表（沿用敏捷算法）</strong>
             <table>
               <thead>
                 <tr>
-                  <th>当前有效敏捷</th>
+                  <th>当前有效{side.attributeName || '敏捷'}</th>
                   <th>属性加值</th>
                 </tr>
               </thead>
@@ -138,10 +138,10 @@ export default function AgilityBonusInfo({
             <p>超过 20：4 + floor((敏捷 − 21) / 2)</p>
             <strong>{side.name} · 本次计算</strong>
             <p>
-              有效敏捷：MAX(1, {calculation}) = {side.effective}
+              有效{side.attributeName || '敏捷'}：MAX(1, {calculation}) = {side.effective}
             </p>
             <p>
-              查表：敏捷 {side.effective} → 加值 {signed(side.bonus)}
+              查表：{side.attributeName || '敏捷'} {side.effective} → 加值 {signed(side.bonus)}
             </p>
             {side.effective > 20 && (
               <p>

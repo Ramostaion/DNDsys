@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { canEditSheetField, resourceField, type SheetField } from '@dnd/shared';
+import { canEditSheetField, resourceField, roomMemberName, type SheetField } from '@dnd/shared';
 import { Backpack, Shirt, BookOpen } from 'lucide-react';
 import type { Snapshot } from '../api';
 import { useUI } from '../store';
@@ -10,6 +10,7 @@ import ValueSource from './ValueSource';
 import CharacterSkills from './CharacterSkills';
 import { useSyncedText } from './useSyncedText';
 import { canEditCharacter, canEditBasics, canViewInventory } from '../permissions';
+import ResourceMeter from './ResourceMeter';
 
 type Props = {
   snap: Snapshot;
@@ -58,16 +59,21 @@ function FieldValue({ p, c, field }: { p: Props; c: any; field: SheetField }) {
   }
   const max = field.maxFieldId ? c.derived?.values?.[field.maxFieldId] : null;
   return (
-    <div className="grid-card space-y-2" data-field-id={field.fieldId}>
-      <div className="flex justify-between gap-3">
-        <div>
+    <div
+      className={`grid-card sheet-field space-y-2 ${field.isResource ? 'is-resource' : ''}`}
+      data-field-id={field.fieldId}
+      data-field-type={field.type}
+      data-resource={field.isResource ? (isShieldField ? 'shield' : 'health') : undefined}
+    >
+      <div className="flex justify-between gap-3 sheet-field-heading">
+        <div className="sheet-field-name">
           <strong>{field.name}</strong>
-          {!isShieldField && <span className="tiny subtle ml-2">{field.fieldId}</span>}
+          {!isShieldField && <span className="tiny subtle ml-2 sheet-field-id">{field.fieldId}</span>}
         </div>
         <div className="flex items-center gap-2">
-          <strong className="text-amber-300">
+          <strong className="text-amber-300 sheet-field-value">
             {effective === undefined ? '—' : String(effective)}
-            {field.isResource && p.isGM && typeof max === 'number' ? ` / ${max}` : ''}
+            {field.isResource && p.isGM && typeof max === 'number' && <small>{` / ${max}`}</small>}
           </strong>
           {field.type === 'number' && (
             <ValueSource name={field.name} base={raw} trace={c.derived?.breakdown?.[field.fieldId]} sources={sources} />
@@ -75,17 +81,17 @@ function FieldValue({ p, c, field }: { p: Props; c: any; field: SheetField }) {
         </div>
       </div>
       {field.type === 'number' && field.isResource && typeof max === 'number' && typeof effective === 'number' && (
-        <div
-          className={`sheet-progress ${field.resourceKind === 'shield' ? 'shield' : ''}`}
-          role="progressbar"
-          aria-label={`${field.resourceKind === 'shield' ? '护盾' : '生命'}条`}
-        >
-          <div style={{ width: `${Math.max(0, Math.min(100, max > 0 ? (effective / max) * 100 : 0))}%` }} />
-        </div>
+        <ResourceMeter
+          value={effective}
+          maximum={max}
+          identity={`${c.id}:${field.fieldId}`}
+          showMaximum={p.isGM}
+          kind={field.resourceKind === 'shield' ? 'shield' : 'health'}
+        />
       )}
       {can && (
         <>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center sheet-field-controls">
             {field.type === 'number' ? (
               <>
                 <input
@@ -183,7 +189,7 @@ export function ShieldSection({ p, c }: { p: Props; c: any }) {
       <div className="sheet-section-heading">
         <h3>护盾</h3>
       </div>
-      <div className="space-y-2">
+      <div className="sheet-fields is-resources">
         {[shield, ...(p.isGM ? fields.filter((field: SheetField) => field.fieldId === shield.maxFieldId) : [])].map(
           (field) => (
             <FieldValue key={field.fieldId} p={p} c={c} field={field} />
@@ -232,11 +238,11 @@ export default function ConfigurableSheet({ p, c }: { p: Props; c: any }) {
     }
   }
   return (
-    <div className="character-sheet space-y-5">
+    <div className="character-sheet sheet-configurable space-y-5">
       <div className="sheet-hero">
         <CharacterAvatar p={p} character={c} />
-        <div className="flex-1 min-w-0">
-          <div className="eyebrow">{c.isNpc ? 'GM CONTROLLED NPC' : 'CUSTOM CHARACTER SHEET'}</div>
+        <div className="flex-1 min-w-0 sheet-identity">
+          <div className="eyebrow">{c.isNpc ? 'GM CONTROLLED NPC' : 'ADVENTURER DOSSIER'}</div>
           <input
             className="sheet-name"
             aria-label="角色名称"
@@ -248,7 +254,10 @@ export default function ConfigurableSheet({ p, c }: { p: Props; c: any }) {
           <div className="tiny subtle">
             {c.isNpc
               ? 'NPC · 仅 GM 可控制'
-              : `${p.snap.members.find((m) => m.userId === c.ownerId)?.user?.username || '未分配玩家'} 的角色`}
+              : `${roomMemberName(
+                  p.snap.members.find((m) => m.userId === c.ownerId),
+                  '未分配玩家',
+                )} 的角色`}
           </div>
         </div>
       </div>
@@ -292,7 +301,7 @@ export default function ConfigurableSheet({ p, c }: { p: Props; c: any }) {
           <div className="sheet-section-heading">
             <h3>{section.name}</h3>
           </div>
-          <div className="space-y-2">
+          <div className={`sheet-fields ${section.name === '生命' ? 'is-resources' : ''}`}>
             {section.fields
               .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
               .map((field) => (

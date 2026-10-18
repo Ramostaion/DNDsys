@@ -1,14 +1,17 @@
 import { Heart, Shield } from 'lucide-react';
 import type { resourceSummary } from '@dnd/shared';
+import ResourceMeter from './ResourceMeter';
 
 export default function ResourceBar({
   resource,
   kind,
   compact = false,
+  identity = kind,
 }: {
   resource: NonNullable<ReturnType<typeof resourceSummary>>;
   kind: 'health' | 'shield';
   compact?: boolean;
+  identity?: string;
 }) {
   const label = kind === 'shield' ? '护盾' : '生命';
   const Icon = kind === 'shield' ? Shield : Heart;
@@ -22,16 +25,7 @@ export default function ResourceBar({
           {resource.current} / {resource.maximum}
         </strong>
       </div>
-      <div
-        className={`sheet-progress ${kind === 'shield' ? 'shield' : ''}`}
-        role="progressbar"
-        aria-label={`${label}条`}
-        aria-valuemin={0}
-        aria-valuemax={Math.max(0, resource.maximum)}
-        aria-valuenow={resource.current}
-      >
-        <div style={{ width: `${resource.percent}%` }} />
-      </div>
+      <ResourceMeter value={resource.current} maximum={resource.maximum} identity={identity} kind={kind} />
     </section>
   );
 }

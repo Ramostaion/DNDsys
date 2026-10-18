@@ -1,3 +1,5 @@
+import StateName from './StateName';
+import { durationText } from './DurationInput';
 import { useState } from 'react';
 import { sortCharacterTags, TAG_VISIBILITIES } from '@dnd/shared';
 import { useUI } from '../../store';
@@ -10,7 +12,7 @@ export default function GmTagOverview({ p }: { p: TagProps }) {
     [visibility, setVisibility] = useState(''),
     [priority, setPriority] = useState('');
   const open = useUI((s) => s.open);
-  if (!p.isGM) return <p>角色标签总览仅主持人可查看。</p>;
+  if (!p.isGM) return <p>角色状态总览仅主持人可查看。</p>;
   const names = new Map(p.snap.characters.map((c) => [c.id, c.name as string]));
   const tags = sortCharacterTags(
     p.snap.characterTags.filter(
@@ -31,14 +33,14 @@ export default function GmTagOverview({ p }: { p: TagProps }) {
     <div className="space-y-4 tag-overview-panel">
       <div>
         <div className="eyebrow">GM STORY NOTEBOOK</div>
-        <h2 className="display-title text-2xl">角色标签总览</h2>
+        <h2 className="display-title text-2xl">角色状态总览</h2>
       </div>
       <input
         className="input"
-        aria-label="搜索角色标签与详情"
+        aria-label="搜索角色状态与详情"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="搜索角色、标签名称或详情全文…"
+        placeholder="搜索角色、状态名称或详情全文…"
       />
       <div className="tag-form-grid">
         <select
@@ -56,11 +58,11 @@ export default function GmTagOverview({ p }: { p: TagProps }) {
         </select>
         <select
           className="input"
-          aria-label="按标签筛选"
+          aria-label="按状态筛选"
           value={definitionId}
           onChange={(e) => setDefinitionId(e.target.value)}
         >
-          <option value="">所有标签</option>
+          <option value="">所有状态</option>
           {p.snap.tagDefinitions.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
@@ -104,16 +106,17 @@ export default function GmTagOverview({ p }: { p: TagProps }) {
               <TagIcon icon={tag.definition.icon} size={20} />
             </span>
             <strong>
-              {names.get(tag.characterId)} · {tag.definition.name}
+              {names.get(tag.characterId)} · <StateName name={tag.definition.name} numeral={tag.romanNumeral} />
             </strong>
           </div>
           <p className="tag-summary text-sm mt-2">{tag.detailsMarkdown || '尚未填写详情'}</p>
           <p className="tiny subtle mt-2">
-            {visibilityNames[tag.visibility]} · 优先级 {tag.priority} · 点击查看/编辑此实例
+            {durationText(tag.remainingTurns)} · {visibilityNames[tag.visibility]} · 优先级 {tag.priority} ·
+            点击查看/编辑此实例
           </p>
         </button>
       ))}
-      {!tags.length && <div className="empty-note">没有匹配的角色标签。</div>}
+      {!tags.length && <div className="empty-note">没有匹配的角色状态。</div>}
     </div>
   );
 }

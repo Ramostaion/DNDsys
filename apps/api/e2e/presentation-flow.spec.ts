@@ -104,7 +104,8 @@ test('GM 放映三张剧情图时，两名玩家同步且人物卡草稿保持�
     await gm.locator('.presentation-asset').filter({ hasText: '第二幕' }).click();
     await gm.getByRole('button', { name: '向房间展示' }).click();
     await expect(p2.locator('.presentation-titlebar')).toContainText('第二幕');
-    await p2.locator('.presentation-titlebar').getByTitle('最小化').click();
+    await expect(p2.locator('.presentation-titlebar').getByTitle('最小化', { exact: true })).toHaveCount(0);
+    await p2.locator('.presentation-titlebar').getByRole('button', { name: '仅关闭我的窗口', exact: true }).click();
     await expect(p2.locator('.presentation-viewer')).toHaveCount(0);
     const tagDefinition = await post(contexts[0], `/rooms/${room.id}/operations`, {
       id: randomUUID(),

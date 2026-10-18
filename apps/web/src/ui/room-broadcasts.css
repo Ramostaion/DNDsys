@@ -1,0 +1,170 @@
+.room-broadcasts {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.room-broadcasts[data-has-turn='true'] {
+  top: 72px;
+}
+.game-shell .room-broadcasts > .public-dice-banner,
+.game-shell .room-broadcasts > .combat-result-banner {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  width: 100%;
+  margin: 0;
+  animation: broadcast-arrive 0.18s ease-out both;
+}
+.game-shell .room-broadcasts > .is-fading {
+  animation: broadcast-depart 0.35s ease-in both;
+}
+.broadcast-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.broadcast-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid #78634777;
+  border-radius: 6px;
+  background: #131b22ed;
+  color: #cbbfa9;
+  font-size: 11px;
+  animation: broadcast-arrive 0.15s ease-out both;
+}
+.broadcast-summary > span {
+  color: #b49a70;
+  flex: none;
+}
+.broadcast-summary strong {
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.broadcast-summary b {
+  font-size: 15px;
+  color: #f1ce91;
+}
+.public-dice-natural {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10px;
+  color: #ead298;
+  letter-spacing: 0.08em;
+}
+.public-dice-banner.has-natural-twenty {
+  border-color: #e6c57d;
+  box-shadow:
+    0 8px 30px #0006,
+    inset 0 0 22px #cfa45633;
+}
+.public-dice-banner.has-natural-twenty::after {
+  content: '✦';
+  position: absolute;
+  right: 12px;
+  top: 9px;
+  color: #f0d49a;
+  animation: natural-rune 0.7s ease-out both;
+  pointer-events: none;
+}
+.public-dice-banner.has-natural-one .public-dice-natural {
+  color: #d5b5b1;
+}
+@keyframes broadcast-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes broadcast-depart {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes natural-rune {
+  from {
+    opacity: 0;
+    transform: scale(0.65) rotate(-30deg);
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.6;
+    transform: scale(1) rotate(0);
+  }
+}
+@media (max-width: 1100px) {
+  .room-broadcasts .broadcast-recent {
+    display: none;
+  }
+  .room-broadcasts {
+    top: 110px;
+    width: min(360px, calc(100% - 20px));
+  }
+  .room-broadcasts[data-has-turn='true'] {
+    top: 164px;
+  }
+}
+@media (max-width: 700px) {
+  .room-broadcasts {
+    top: 84px;
+    width: calc(100% - 16px);
+  }
+  .room-broadcasts[data-has-turn='true'] {
+    top: 158px;
+  }
+  .room-broadcasts .public-dice-text {
+    display: none;
+  }
+}
+@media (max-height: 650px) {
+  .room-broadcasts .broadcast-recent {
+    display: none;
+  }
+  .room-broadcasts .public-dice-content {
+    min-height: 36px;
+  }
+  .room-broadcasts .public-dice-banner .dice-stage {
+    max-height: 110px;
+    overflow: hidden;
+  }
+  .room-broadcasts .combat-result-banner {
+    padding: 8px 12px;
+  }
+  .room-broadcasts .combat-result-banner strong {
+    font-size: 15px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-shell .room-broadcasts > *,
+  .broadcast-summary,
+  .public-dice-banner::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,12 +1,16 @@
 import type { Snapshot } from '../api';
 import { characterHealth, characterShield } from './character-summary';
 import ResourceBar from './ResourceBar';
+import { roomMemberName } from '@dnd/shared';
 
 export default function CharacterHoverCard({ snap, character }: { snap: Snapshot; character: any }) {
   const health = characterHealth(snap, character),
     shield = characterShield(snap, character),
     values = character.derived?.values || {};
-  const owner = snap.members.find((member) => member.userId === character.ownerId)?.user.username;
+  const owner = roomMemberName(
+    snap.members.find((member) => member.userId === character.ownerId),
+    '',
+  );
   const basics = (snap.room.sheetSchema || [])
     .filter((field: any) => field.type === 'text' || field.type === 'select' || /基础|基本/.test(field.group || ''))
     .filter((field: any) => Object.hasOwn(values, field.fieldId) && !field.isResource)
@@ -37,8 +41,12 @@ export default function CharacterHoverCard({ snap, character }: { snap: Snapshot
           <p className="tiny subtle">{character.isNpc ? 'NPC · GM 控制' : owner ? `玩家：${owner}` : '未分配玩家'}</p>
         </div>
       </header>
-      {shield && <ResourceBar resource={shield} kind="shield" />}
-      {health ? <ResourceBar resource={health} kind="health" /> : <p className="tiny subtle">暂无可见生命数据</p>}
+      {shield && <ResourceBar resource={shield} kind="shield" identity={`${character.id}:shield`} />}
+      {health ? (
+        <ResourceBar resource={health} kind="health" identity={`${character.id}:health`} />
+      ) : (
+        <p className="tiny subtle">暂无可见生命数据</p>
+      )}
       {basics.length > 0 && (
         <dl className="hover-basics">
           {basics.map((field: any) => (

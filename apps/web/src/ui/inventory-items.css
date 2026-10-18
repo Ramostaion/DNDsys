@@ -1,0 +1,110 @@
+.inventory-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-wrap: anywhere;
+  color: #eadfc9;
+}
+.inventory-item-details .item-detail-fields {
+  margin: 0;
+}
+.inventory-item-tooltip,
+.inventory-item-menu {
+  position: fixed;
+  z-index: 12000;
+  border: 1px solid #a5854c;
+  border-radius: 8px;
+  background: #111a22f7;
+  box-shadow: 0 12px 35px #0009;
+  color: #eadfc9;
+}
+.inventory-item-tooltip {
+  width: 330px;
+  max-width: calc(100vw - 24px);
+  max-height: min(440px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 15px;
+  overscroll-behavior: contain;
+}
+.inventory-item-menu {
+  width: 178px;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+}
+.inventory-item-menu button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 13px;
+}
+.inventory-item-menu button:hover,
+.inventory-item-menu button:focus-visible {
+  background: #66502e;
+  outline: 1px solid #d4af57;
+}
+.inventory-item-menu button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.inventory-delete-confirm {
+  padding: 12px;
+  border: 1px solid #9e6958;
+  border-radius: 6px;
+  background: #39251ed9;
+}
+.inventory-panel.drop-active {
+  outline: 1px solid #d4af57;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.equip-slot [draggable='true'] {
+  cursor: grab;
+}
+.inventory-item-tooltip img {
+  object-fit: cover;
+}
+
+.equip-chest-group {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px solid #d4af5752;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #d4af570d, #111c2499);
+}
+.equip-chest-group > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d4af57;
+  margin-bottom: 12px;
+}
+.equip-chest-group > header span {
+  font-size: 11px;
+  color: #b4b7b4;
+  margin-left: auto;
+}
+.equip-chest-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.equip-backpack-slot {
+  border-color: #8ba99b66;
+  background: linear-gradient(155deg, #23403633, #0f171dcc);
+}
+.equip-backpack-slot .eyebrow {
+  color: #b7cdbf;
+}
+@media (max-width: 560px) {
+  .equip-chest-pair {
+    grid-template-columns: 1fr;
+  }
+  .equip-chest-group > header span {
+    max-width: 110px;
+    text-align: right;
+  }
+}

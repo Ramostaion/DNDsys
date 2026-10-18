@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { DEFAULT_RULES, permissionDefaults } from '@dnd/shared';
+import { DEFAULT_RULES, permissionDefaults, roomMemberName } from '@dnd/shared';
 import { post } from '../../api';
 import type { RoomPanelProps as Props } from './types';
 import { useNavigate } from 'react-router-dom';
 import RoomDeleteButton from './RoomDeleteButton';
 import { useUI } from '../../store';
+import RoomProfileSettings from './RoomProfileSettings';
 
 function Field({
   label,
@@ -186,14 +187,16 @@ function PermissionSettings({ p }: { p: Props }) {
           .filter((member) => member.role !== 'GM')
           .map((member) => (
             <div key={member.userId} className="grid-card mb-2">
-              <strong className="text-sm">{member.user.username}</strong>
+              <strong className="text-sm" title={`账号：${member.user.username}`}>
+                {roomMemberName(member)}
+              </strong>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {permissionLabels.map(([key, label]) => (
                   <label key={key} className="tiny">
                     <span>{label}</span>
                     <select
                       disabled={busy}
-                      aria-label={`${member.user.username} · ${label}`}
+                      aria-label={`${roomMemberName(member)} · ${label}`}
                       className="input !p-1 text-xs"
                       value={
                         member.permissions?.[key] === true
@@ -305,7 +308,7 @@ function Settings({ p }: { p: Props }) {
               .filter((m) => m.role !== 'GM')
               .map((m) => (
                 <div key={m.userId} className="grid-card mb-2">
-                  <div>{m.user.username}</div>
+                  <div title={`账号：${m.user.username}`}>{roomMemberName(m)}</div>
                   <div className="flex flex-wrap gap-3 tiny mt-2">
                     {[
                       ['draw', '绘画'],
@@ -331,7 +334,7 @@ function Settings({ p }: { p: Props }) {
                   <button
                     className="tiny text-red-300 mt-2"
                     onClick={async () => {
-                      if (confirm(`踢出 ${m.user.username}？`)) {
+                      if (confirm(`踢出 ${roomMemberName(m)}？`)) {
                         await post(`/rooms/${room.id}/kick`, { userId: m.userId });
                         await p.refresh();
                       }
@@ -353,6 +356,7 @@ export default function RoomSettings({ p }: { p: Props }) {
   const navigate = useNavigate();
   return (
     <>
+      <RoomProfileSettings p={p} />
       <Settings p={p} />
       <PermissionSettings p={p} />
       <EquipmentSlotsSettings p={p} />

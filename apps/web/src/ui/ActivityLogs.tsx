@@ -1,5 +1,23 @@
 import type { Snapshot } from '../api';
+import { roomMemberName } from '@dnd/shared';
 const labels: Record<string, string> = {
+  'initiative.character': '保存人物先手权重',
+  'initiative.preset.save': '保存先手模板',
+  'initiative.preset.select': '选择全局先手模板',
+  'initiative.preset.delete': '删除先手模板',
+  'turn.start': '进入回合模式',
+  'turn.advance': '结束角色回合',
+  'turn.skip': '跳过并结束角色回合',
+  'turn.pause': '暂停回合',
+  'turn.resume': '继续回合',
+  'turn.end': '结束回合模式',
+  'turn.order': '调整回合顺序',
+  'turn.focus': '无耗时切换行动者',
+  'turn.add': '人物加入回合',
+  'turn.remove': '人物移出回合',
+  'turn.recalculate': '重新计算综合先手',
+  'turn.total': '调整预计总轮数',
+  'member.profile': '修改房间内名称',
   'character.create': '创建角色',
   'character.update': '修改人物卡',
   'character.copy': '复制角色',
@@ -26,6 +44,7 @@ const labels: Record<string, string> = {
   'inventory.add': '物品加入背包',
   'inventory.move': '整理背包格子',
   'inventory.update': '调整背包物品数量',
+  'inventory.delete': '删除背包物品',
   'inventory.instance.update': '修改背包物品备注',
   'inventory.transfer': '转移背包物品',
   'inventory.loot': '拾取归零角色物品',
@@ -63,24 +82,25 @@ const labels: Record<string, string> = {
   'combat.attack': '记录旧版攻击',
   'combat.record': '追加人工裁决记录',
   'combat.correct': '更正裁决记录',
-  'tagDefinition.create': '新建标签定义',
-  'tagDefinition.update': '修改标签定义',
-  'tagDefinition.delete': '删除标签定义',
-  'tagDefinition.archive': '归档标签定义',
-  'tagDefinition.restore': '恢复标签定义',
-  'characterTag.create': '添加角色标签',
-  'characterTag.attach': '添加角色标签',
-  'characterTag.attachBatch': '批量添加角色标签',
-  'characterTag.detach': '移除角色标签',
-  'characterTag.update': '修改角色标签备注',
-  'characterTag.delete': '移除角色标签',
+  'tagDefinition.create': '新建状态定义',
+  'tagDefinition.update': '修改状态定义',
+  'tagDefinition.delete': '删除状态定义',
+  'tagDefinition.archive': '从状态库删除状态',
+  'tagDefinition.restore': '恢复状态',
+  'characterTag.create': '添加角色状态',
+  'characterTag.attach': '添加角色状态',
+  'characterTag.fromSkill': '从技能添加角色状态',
+  'characterTag.attachBatch': '批量添加角色状态',
+  'characterTag.detach': '移除角色状态',
+  'characterTag.update': '修改角色状态备注',
+  'characterTag.delete': '移除角色状态',
 };
 export const activityLabel = (action: string) => labels[action] || '更新房间内容';
 export default function ActivityLogs({ snap }: { snap: Snapshot }) {
   return (
     <div className="activity-logs space-y-2">
       {snap.logs.map((log) => {
-        const actor = snap.members.find((member) => member.userId === log.userId)?.user.username || '已离开的成员';
+        const actor = roomMemberName(snap.members.find((member) => member.userId === log.userId));
         const entity = [
           ...snap.characters,
           ...snap.maps,
@@ -108,6 +128,29 @@ export default function ActivityLogs({ snap }: { snap: Snapshot }) {
                 {actor} · {activityLabel(log.action)}
                 {name ? `：${name}` : ''}
               </p>
+              {log.action.startsWith('turn.') && (
+                <>
+                  <p>
+                    第 {log.data.round} 轮
+                    {log.data.beforeVersion !== undefined
+                      ? ` · 版本 ${log.data.beforeVersion} → ${log.data.afterVersion}`
+                      : ''}
+                  </p>
+                  {log.data.transition?.endedCharacterId && (
+                    <p>
+                      结束人物：
+                      {snap.characters.find((c) => c.id === log.data.transition.endedCharacterId)?.name ||
+                        '已移除的人物'}
+                    </p>
+                  )}
+                  {log.data.transition?.changed?.map((state: any) => (
+                    <p key={state.id}>
+                      {snap.characters.find((c) => c.id === state.characterId)?.name || '已移除的人物'} · {state.name}：
+                      {state.before} → {state.after === 0 ? '已解除' : state.after}
+                    </p>
+                  ))}
+                </>
+              )}
               {field && <p>字段：{field.name}</p>}
               {log.data?.previousValue !== undefined && log.data?.newValue !== undefined && (
                 <p>

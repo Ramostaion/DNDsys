@@ -3,6 +3,7 @@ import { ChevronLeft, Upload } from 'lucide-react';
 import type { Snapshot } from '../api';
 import { useUI } from '../store';
 import MapEditor from './MapEditor';
+import { STARTER_MAP_IMAGE, mapImageUrl } from './map-assets';
 type Props = {
   snap: Snapshot;
   isGM: boolean;
@@ -182,7 +183,11 @@ export default function MapLibrary({ p, id }: { p: Props; id?: string }) {
         <section className="grid-card map-detail" aria-label="所选地图详情">
           <h3 className="display-title text-xl">{selected.name}</h3>
           {selected.imageUrl && (
-            <img src={selected.imageUrl} alt={selected.name} className="w-full max-h-44 object-cover rounded mt-3" />
+            <img
+              src={mapImageUrl(selected.imageUrl)}
+              alt={selected.name}
+              className="w-full max-h-44 object-cover rounded mt-3"
+            />
           )}
           <p className="tiny subtle mt-2">
             {selected.width} × {selected.height} · {selected.visibility === 'GM' ? '仅 GM 可见' : '房间公开'}
@@ -246,7 +251,7 @@ export default function MapLibrary({ p, id }: { p: Props; id?: string }) {
               onClick={async () => {
                 const map = await run('map.create', {
                   name: '荒原瞭望塔',
-                  imageUrl: '/maps/frontier-watchtower.png',
+                  imageUrl: STARTER_MAP_IMAGE,
                   width: 1672,
                   height: 940,
                 });
@@ -256,10 +261,10 @@ export default function MapLibrary({ p, id }: { p: Props; id?: string }) {
                 }
               }}
             >
-              <img src="/maps/frontier-watchtower.png" alt="荒原瞭望塔预览" />
+              <img src={STARTER_MAP_IMAGE} alt="荒原瞭望塔夜间预览" />
               <span>
                 <strong>使用示例战斗地图</strong>
-                <small>一键创建并切换到荒原瞭望塔</small>
+                <small>一键创建并切换到荒原瞭望塔（月夜）</small>
               </span>
             </button>
           )}
@@ -270,7 +275,9 @@ export default function MapLibrary({ p, id }: { p: Props; id?: string }) {
         <div className="grid grid-cols-2 gap-3">
           {shown.map((map) => (
             <article className="grid-card" key={map.id}>
-              {map.imageUrl && <img src={map.imageUrl} alt="" className="w-full h-24 object-cover rounded mb-2" />}
+              {map.imageUrl && (
+                <img src={mapImageUrl(map.imageUrl)} alt="" className="w-full h-24 object-cover rounded mb-2" />
+              )}
               <strong>{map.name}</strong>
               {map.id === p.snap.room.activeMapId && <span className="badge ml-2">当前</span>}
               <button className="btn block mt-3" onClick={() => setCurrent(map.id)}>
@@ -467,7 +474,7 @@ export function MapPortal({ p, id }: { p: Props; id?: string }) {
         </form>
       )}
       {target.imageUrl && (
-        <img src={target.imageUrl} alt={target.name} className="w-full max-h-52 object-cover rounded" />
+        <img src={mapImageUrl(target.imageUrl)} alt={target.name} className="w-full max-h-52 object-cover rounded" />
       )}
       <div className="flex gap-2 flex-wrap">
         {p.isGM ? (

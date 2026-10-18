@@ -1,3 +1,5 @@
+import InitiativeSettings from '../turns/InitiativeSettings';
+import TurnManager from '../turns/TurnManager';
 import MapLibrary, { MapPortal } from '../MapLibrary';
 import ActivityLogs from '../ActivityLogs';
 import { AttackProfiles } from '../Combat';
@@ -9,7 +11,6 @@ import DiceTray from '../DiceTray';
 import { Inventory, Equipment, PlayerBackpacks } from '../InventoryEquipment';
 import TemplateLibrary from '../TemplateLibrary';
 import SheetManager from '../SheetManager';
-import TradePanel from '../TradePanel';
 import CharacterDirectory from '../CharacterDirectory';
 import CharacterTagManager from '../character-tags/CharacterTagManager';
 import CharacterTagDetails from '../character-tags/CharacterTagDetails';
@@ -25,6 +26,10 @@ import RoomDrawingTools from '../room/RoomDrawingTools';
 
 export default function WindowContent({ w, p }: { w: WindowState; p: Props }) {
   switch (w.type) {
+    case 'initiative-settings':
+      return p.isGM ? <InitiativeSettings p={p} windowId={w.id} /> : null;
+    case 'turn-system':
+      return p.isGM ? <TurnManager p={p} /> : null;
     case 'private-clues':
       return <PrivateClues key={`${p.snap.room.id}:${p.me.id}`} p={p} windowId={w.id} />;
     case 'clue-reader':
@@ -61,14 +66,7 @@ export default function WindowContent({ w, p }: { w: WindowState; p: Props }) {
     case 'item':
       return <ItemEditor p={p} id={w.entityId} windowId={w.id} />;
     case 'inventory':
-      return !w.entityId ? (
-        <PlayerBackpacks p={p} />
-      ) : (
-        <>
-          <Inventory p={p} id={w.entityId} />
-          <TradePanel p={p} characterId={w.entityId} />
-        </>
-      );
+      return !w.entityId ? <PlayerBackpacks p={p} /> : <Inventory p={p} id={w.entityId} />;
     case 'equipment':
       return <Equipment p={p} id={w.entityId} />;
     case 'templates':

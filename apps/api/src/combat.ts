@@ -1,7 +1,8 @@
 import type { Prisma, RoomMember } from '@prisma/client';
-import { canControlCharacter, compareCombatants, type RuleConfig } from '@dnd/shared';
+import { canControlCharacter, compareCombatants, contestAttributes, type RuleConfig } from '@dnd/shared';
 import { recordFreeRoll } from './dice-service.js';
 import { adjudicateAgility } from './agility-service.js';
+import { consumeCombatDraft } from './combat-drafts.js';
 import { array, object } from './data.js';
 import { fail as bad } from './http.js';
 
@@ -258,18 +259,34 @@ export async function combatOperation(
       const visibility = p.visibility === 'PRIVATE' ? 'PRIVATE' : 'PUBLIC';
       if (visibility === 'PRIVATE') gm(member);
       const encounter = await tx.combatEncounter.findFirst({ where: { roomId, status: 'ACTIVE' } });
+      const actorAttribute = key(p.actorAttribute) || '敏捷';
+      if (!(contestAttributes as readonly string[]).includes(actorAttribute)) bad(400, '判定属性无效');
       const adjudication =
-        kind === 'DECLARATION'
-          ? await adjudicateAgility(tx, {
-              roomId,
-              actorId: actor?.id,
-              targetId: target?.id,
-              operationId: args.opId,
-              isGM: member.role === 'GM',
-              privateRecord: visibility === 'PRIVATE',
-            })
+        kind === 'DECLARATION' || p.draftId
+          ? p.draftId
+            ? await consumeCombatDraft(tx, {
+                id: key(p.draftId),
+                revision: p.draftRevision,
+                eventId: p.draftEventId,
+                roomId,
+                userId,
+                actorId: actor?.id,
+                targetId: target?.id,
+                privateRecord: visibility === 'PRIVATE',
+                operationId: args.opId,
+                actorAttribute,
+              })
+            : await adjudicateAgility(tx, {
+                roomId,
+                actorId: actor?.id,
+                targetId: target?.id,
+                operationId: args.opId,
+                isGM: member.role === 'GM',
+                privateRecord: visibility === 'PRIVATE',
+                actorAttribute,
+              })
           : {};
-      return event(
+      const saved = await event(
         tx,
         roomId,
         userId,
@@ -280,6 +297,12 @@ export async function combatOperation(
         target?.id,
         adjudication.contest?.broadcast.scope === 'GM' ? 'PRIVATE' : visibility,
       );
+      if (p.draftId)
+        await tx.combatDraft.update({
+          where: { id: key(p.draftId) },
+          data: { state: 'SAVED', recordId: saved.id, adjudication: json({}), fingerprint: '' },
+        });
+      return saved;
     }
     case 'combat.correct': {
       const original = await tx.combatEvent.findFirst({ where: { id: key(p.eventId), roomId } });

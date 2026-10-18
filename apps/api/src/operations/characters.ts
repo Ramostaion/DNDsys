@@ -417,6 +417,7 @@ export async function characterOperation(context: OperationContext) {
           traits: json(c.traits),
           inventorySlots: c.inventorySlots,
           attackProfiles: json(c.attackProfiles),
+          initiativeConfig: json(c.initiativeConfig),
         },
       });
       if (c.avatarUrl?.startsWith(`/uploads/${roomId}/characters/${c.id}/`)) {
@@ -452,6 +453,9 @@ export async function characterOperation(context: OperationContext) {
             characterId: copy.id,
             tagDefinitionId: tag.tagDefinitionId,
             detailsMarkdown: tag.detailsMarkdown,
+            customFields: json(tag.customFields),
+            remainingTurns: tag.remainingTurns,
+            romanNumeral: tag.romanNumeral,
             visibility: tag.visibility,
             priority: tag.priority,
             sortOrder: tag.sortOrder,

@@ -16,6 +16,11 @@ export const TAG_ICONS = [
 ] as const;
 export const TAG_COLORS = ['#c69452', '#b56ce2', '#62a9db', '#60b895', '#de7385', '#b5bace'] as const;
 export const TAG_DETAILS_MAX = 100_000;
+export const TAG_ROMAN_NUMERALS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'] as const;
+export type TagRomanNumeral = (typeof TAG_ROMAN_NUMERALS)[number];
+export function stateDisplayName(name: string, numeral?: string | null): string {
+  return numeral && (TAG_ROMAN_NUMERALS as readonly string[]).includes(numeral) ? `${name} ${numeral}` : name;
+}
 export interface TagAppearance {
   id: string;
   name: string;
@@ -24,6 +29,9 @@ export interface TagAppearance {
   isArchived: boolean;
 }
 export interface TagDefinition extends TagAppearance {
+  romanNumeral?: TagRomanNumeral;
+  defaultDurationTurns?: number | null;
+  customFields?: { name: string; value: string | number }[];
   roomId: string;
   templateDescription: string;
   defaultVisibility: TagVisibility;
@@ -34,6 +42,9 @@ export interface TagDefinition extends TagAppearance {
   characterCount: number;
 }
 export interface CharacterTag {
+  romanNumeral?: TagRomanNumeral;
+  remainingTurns?: number | null;
+  customFields?: { name: string; value: string | number }[];
   id: string;
   roomId: string;
   characterId: string;

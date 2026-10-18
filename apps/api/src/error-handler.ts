@@ -24,6 +24,8 @@ export const errorHandler: express.ErrorRequestHandler = (
     return res
       .status(e.code === 'LIMIT_FILE_SIZE' ? 413 : 400)
       .json({ error: e.code === 'LIMIT_FILE_SIZE' ? '图片超过 10MB' : '上传文件无效' });
+  if (e.code === 'P2028' || e.code === 'P2024')
+    return res.setHeader('Retry-After', '1').status(503).json({ error: '数据库繁忙，请稍后重试', code: 'DB_BUSY' });
   if (e.code === 'P2025') return res.status(404).json({ error: '目标不存在' });
   if (e.code === 'P2034') return res.status(409).json({ error: '数据已被其他人修改，请刷新后重试' });
   if (e.code === 'P2002' || e.code === 'P2003') return res.status(409).json({ error: '数据冲突，请刷新后重试' });

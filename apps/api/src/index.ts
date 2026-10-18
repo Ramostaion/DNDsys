@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { readConfig } from './config.js';
 import { startServer } from './bootstrap.js';
 
-const db = new PrismaClient();
+const db = new PrismaClient({ transactionOptions: { maxWait: 15000, timeout: 10000 } });
 try {
   const runtime = await startServer(db, readConfig());
   let stopping = false;

@@ -45,6 +45,7 @@ export function usePrivateClues(roomId: string | undefined, userId: string) {
     [unreadCount, setUnread] = useState(0),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
+    [noticeSequence, setNoticeSequence] = useState(0),
     [revision, setRevision] = useState(0);
   const [assetRequest, selectAsset] = useState<string | null>(null);
   const serial = useRef(0),
@@ -65,7 +66,10 @@ export function usePrivateClues(roomId: string | undefined, userId: string) {
         });
         if (seq !== serial.current || activeKey.current !== key) return;
         const added = known.current ? data.items.filter((item) => !known.current!.has(item.id) && !item.revokedAt) : [];
-        if (shouldNotify.current && added.length) setNotice(`收到 ${added.length} 条私密线索，可稍后从收件箱查看。`);
+        if (shouldNotify.current && added.length) {
+          setNotice(`收到 ${added.length} 条私密线索，可稍后从收件箱查看。`);
+          setNoticeSequence((old) => old + 1);
+        }
         shouldNotify.current = false;
         known.current = new Set(data.items.map((item) => item.id));
         setItems(data.items);
@@ -106,12 +110,13 @@ export function usePrivateClues(roomId: string | undefined, userId: string) {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(''), 6000);
     return () => clearTimeout(timer);
-  }, [notice]);
+  }, [notice, noticeSequence]);
   return {
     items: scope === key ? items : [],
     unreadCount: scope === key ? unreadCount : 0,
     error: scope === key ? error : '',
     notice: scope === key ? notice : '',
+    noticeId: `${key}:${noticeSequence}`,
     revision,
     refresh,
     assetRequest: scope === key ? assetRequest : null,

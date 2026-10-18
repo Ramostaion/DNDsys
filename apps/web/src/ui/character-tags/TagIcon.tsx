@@ -59,7 +59,7 @@ export function TagIcon({ icon, size = 16 }: { icon: string; size?: number }) {
 export function VisibilitySelect({
   value,
   onChange,
-  label = '标签可见范围',
+  label = '状态可见范围',
 }: {
   value: TagVisibility;
   onChange: (v: TagVisibility) => void;
@@ -96,7 +96,7 @@ export function IconPicker({
 }) {
   return (
     <div className="space-y-3">
-      <span className="label">标签图标与颜色</span>
+      <span className="label">状态图标与颜色</span>
       <div className="tag-icon-picker">
         {TAG_ICONS.map((key) => (
           <button
@@ -133,7 +133,7 @@ export function IconPicker({
             onClick={() => onColor(value)}
           />
         ))}
-        <input type="color" aria-label="标签颜色" value={color} onChange={(e) => onColor(e.target.value)} />
+        <input type="color" aria-label="状态颜色" value={color} onChange={(e) => onColor(e.target.value)} />
         <span className="tag-symbol-preview" style={{ color, borderColor: color }}>
           <TagIcon icon={icon} size={22} />
         </span>

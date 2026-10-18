@@ -36,4 +36,6 @@ export type Snapshot = {
   trades: any[];
   characterTags: CharacterTag[];
   tagDefinitions: TagDefinition[];
+  initiativePresets?: import('@dnd/shared').InitiativePresetView[];
+  turnSession?: import('@dnd/shared').TurnSessionView | null;
 };

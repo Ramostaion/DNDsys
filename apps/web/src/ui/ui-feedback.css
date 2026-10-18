@@ -1,0 +1,217 @@
+.resource-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 12px;
+}
+.resource-meter > .sheet-progress {
+  position: relative;
+  flex: 1;
+  isolation: isolate;
+}
+.resource-meter .resource-fill {
+  position: relative;
+  z-index: 1;
+}
+.resource-meter .resource-trail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #f0bca4;
+  opacity: 0.8;
+  animation: resource-trail-fade 1.15s ease-out both;
+}
+.resource-shield .resource-trail {
+  background: #c4f1ff;
+}
+.resource-delta {
+  width: 38px;
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.resource-delta.is-gain {
+  color: #96d6a4;
+}
+.resource-delta.is-loss {
+  color: #efa294;
+}
+.resource-shield .resource-delta.is-loss {
+  color: #92d8f2;
+}
+.resource-delta > span {
+  display: inline-block;
+  animation: resource-delta-arrive 1.2s ease-out both;
+}
+@keyframes resource-trail-fade {
+  0%,
+  25% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes resource-delta-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  15%,
+  75% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.window {
+  border-color: #64533d;
+  transition:
+    border-color 0.16s,
+    box-shadow 0.16s;
+}
+.window.is-active {
+  border-color: #c8a366;
+  box-shadow:
+    0 24px 60px #000b,
+    0 0 0 1px #d3a96024;
+}
+.window:not(.is-active) > .window-title {
+  color: #baad97;
+  border-bottom-color: #62543f;
+}
+.window.is-closing {
+  animation: window-depart 0.12s ease-in both;
+  pointer-events: none;
+}
+.window-body {
+  position: relative;
+}
+.action-feedback {
+  height: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  background: #131a20;
+  border-top: 1px solid #57493277;
+  font-size: 11px;
+  color: #c5b99f;
+  overflow: hidden;
+}
+.action-feedback span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.action-feedback.is-idle {
+  border-top-color: transparent;
+}
+.action-feedback.is-success {
+  color: #a4d5ab;
+  animation: action-confirm 0.3s ease-out;
+}
+.action-feedback.is-error {
+  color: #efb2a7;
+}
+.action-feedback.is-pending svg {
+  animation: action-spin 0.8s linear infinite;
+}
+@keyframes window-depart {
+  to {
+    opacity: 0;
+    transform: translateY(5px) scale(0.985);
+  }
+}
+@keyframes action-confirm {
+  from {
+    background: #304234;
+  }
+  to {
+    background: #131a20;
+  }
+}
+@keyframes action-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.game-shell .inventory-slot:hover,
+.game-shell .equip-slot:hover {
+  transform: none;
+  box-shadow: none;
+}
+.inventory-slot,
+.equip-slot {
+  position: relative;
+}
+.inventory-slot.is-drop-target,
+.equip-slot.is-drop-target {
+  outline: 2px solid #d9b878;
+  outline-offset: -2px;
+  background: #473c2c;
+}
+.inventory-slot.is-drop-blocked,
+.equip-slot.is-drop-blocked {
+  outline: 2px solid #bf7770;
+  outline-offset: -2px;
+  background: #432b2b;
+}
+.drop-hint {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 3px;
+  z-index: 2;
+  border-radius: 3px;
+  background: #131a20ed;
+  color: #f0d7a7;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 3px;
+  pointer-events: none;
+}
+.is-drop-blocked .drop-hint {
+  color: #efb2a7;
+}
+.inventory-slot.is-drop-pending,
+.equip-slot.is-drop-pending {
+  box-shadow: inset 0 0 0 2px #bb9a6399;
+}
+.inventory-slot.is-drop-landed,
+.equip-slot.is-drop-landed {
+  animation: drop-confirm 0.3s ease-out;
+}
+.inventory-panel.is-dragging .inventory-slot,
+.equipment-panel.is-dragging .equip-slot {
+  transform: none;
+}
+@keyframes drop-confirm {
+  0% {
+    box-shadow: inset 0 0 0 2px #ebca82;
+    background: #645236;
+  }
+  100% {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .resource-meter *,
+  .action-feedback,
+  .action-feedback *,
+  .window,
+  .inventory-slot,
+  .equip-slot {
+    animation: none !important;
+    transition: none !important;
+  }
+  .resource-trail {
+    display: none;
+  }
+}

@@ -5,15 +5,26 @@ import {
   characterCurrentHealth,
   withShieldFields,
   compareCombatants,
+  inventoryCapacity,
+  withBackpackSlot,
   type SheetField,
 } from '@dnd/shared';
 import type { PrismaClient } from '@prisma/client';
 import { array, object } from './data.js';
 import { visibleCharacterTags } from './character-tags.js';
+import { fail } from './http.js';
+import { visibleTurnSession } from './turn-system.js';
 import { memberCan } from './permissions.js';
-import { visibleCombatRecord } from './combat-visibility.js';
+import { visibleCombatRecord, visibleModifier } from './combat-visibility.js';
 
-export async function snapshot(db: PrismaClient, roomId: string, viewerId: string, isGM = false) {
+export async function snapshot(
+  db: PrismaClient,
+  roomId: string,
+  viewerId: string,
+  isGM = false,
+  attempt = 0,
+): Promise<Record<string, any>> {
+  const turnAtStart = await db.turnSession.findFirst({ where: { roomId, status: { not: 'ENDED' } } });
   const room = await db.room.findUniqueOrThrow({ where: { id: roomId } });
   const members = await db.roomMember.findMany({
     where: { roomId },
@@ -40,6 +51,8 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
     object(members.find((member) => member.userId === viewerId)?.permissions).editAllCharacters === true,
   );
   const characters = visibleCharacters.map((character) => {
+    const stateVisible = (id: string) => isGM || tags.characterTags.some((tag) => tag.id === id);
+    const redact = (change: any) => (isGM ? change : visibleModifier(change, stateVisible));
     const allowed = new Set(definitions.filter((field) => visible(field, character)).map((field) => field.fieldId));
     const hide = (input: unknown) =>
       Object.fromEntries(
@@ -48,6 +61,15 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
         ),
       );
     const derived = object(character.derived);
+    const breakdown = Object.fromEntries(
+      Object.entries(object(derived.breakdown)).map(([id, entry]) => [
+        id,
+        { ...object(entry), changes: array(object(entry).changes).map(redact) },
+      ]),
+    );
+    const hiddenState = Object.values(object(derived.breakdown)).some((entry) =>
+      array(object(entry).changes).some((change) => redact(change) !== change),
+    );
     const agility = object(derived.agility);
     const visibleAgility =
       isGM ||
@@ -72,6 +94,8 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
     );
     return {
       ...character,
+      initiativeConfig: isGM ? character.initiativeConfig : undefined,
+      inventorySlots: inventoryVisible ? inventoryCapacity(room, character) : character.inventorySlots,
       inventoryVisible,
       inventoryLootable,
       inventory: inventoryVisible ? character.inventory : [],
@@ -79,13 +103,14 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
       fieldValues: hide(character.fieldValues),
       derived: {
         ...derived,
+        inventoryBonus: inventoryVisible ? derived.inventoryBonus : undefined,
         agility:
           visibleAgility && agility.fieldId
-            ? { ...agility, modifiers: inventoryVisible ? agility.modifiers : [] }
+            ? { ...agility, modifiers: inventoryVisible ? array(agility.modifiers).map(redact) : [] }
             : null,
         values: visibleValues,
-        sources: inventoryVisible ? hide(derived.sources) : {},
-        breakdown: inventoryVisible ? hide(derived.breakdown) : {},
+        sources: inventoryVisible && !hiddenState ? hide(derived.sources) : {},
+        breakdown: inventoryVisible ? hide(breakdown) : {},
         errors: hide(derived.errors),
       },
     };
@@ -136,6 +161,7 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
   const characterById = new Map(allCharacters.map((character) => [character.id, character]));
   const logs = allLogs.filter((log) => {
     if (isGM) return true;
+    if (log.action.startsWith('turn.') || log.action.startsWith('initiative.')) return false;
     if (log.action.startsWith('tagDefinition.') || log.action.startsWith('characterTag.')) return false;
     if (
       log.entityId &&
@@ -194,7 +220,13 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
       return ids.every((id) => !id || visibleCharacterIds.has(String(id)));
     })
     .map((event) =>
-      isGM ? event : visibleCombatRecord(event, (id) => characters.find((c) => c.id === id)?.inventoryVisible === true),
+      isGM
+        ? event
+        : visibleCombatRecord(
+            event,
+            (id) => characters.find((c) => c.id === id)?.inventoryVisible === true,
+            (id) => tags.characterTags.some((tag) => tag.id === id),
+          ),
     );
   const trades = await db.tradeRequest.findMany({
     where: { roomId, ...(isGM ? {} : { OR: [{ senderId: viewerId }, { recipientId: viewerId }] }) },
@@ -213,9 +245,28 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
   });
   const visibleRoom = {
     ...room,
+    initiativePresetId: isGM ? room.initiativePresetId : undefined,
+    equipmentSlots: withBackpackSlot(array(room.equipmentSlots)),
     activeMapId: room.activeMapId && visibleMapIds.has(room.activeMapId) ? room.activeMapId : null,
     sheetSchema: definitions.filter((field) => isGM || field.visibility !== 'GM'),
   };
+  const turnSession = await visibleTurnSession(
+    turnAtStart,
+    viewer,
+    viewerId,
+    visibleCharacters,
+    maps,
+    tokens,
+    tags.characterTags,
+  );
+  const turnAtEnd = await db.turnSession.findFirst({
+    where: { roomId, status: { not: 'ENDED' } },
+    select: { id: true, version: true },
+  });
+  if (turnAtStart?.id !== turnAtEnd?.id || turnAtStart?.version !== turnAtEnd?.version) {
+    if (attempt < 2) return snapshot(db, roomId, viewerId, isGM, attempt + 1);
+    fail(409, '回合正在更新，请刷新以获取完整状态');
+  }
   return {
     room: visibleRoom,
     members,
@@ -235,5 +286,9 @@ export async function snapshot(db: PrismaClient, roomId: string, viewerId: strin
     combatEvents,
     trades,
     ...tags,
+    initiativePresets: isGM
+      ? await db.initiativePreset.findMany({ where: { roomId }, orderBy: { createdAt: 'asc' } })
+      : [],
+    turnSession,
   };
 }

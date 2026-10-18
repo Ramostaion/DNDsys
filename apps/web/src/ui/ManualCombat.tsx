@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { compareCombatants } from '@dnd/shared';
+import { compareCombatants, roomMemberName, contestAttributes } from '@dnd/shared';
 import { Dices, Plus, ChevronRight } from 'lucide-react';
 import type { Snapshot } from '../api';
 import { useUI } from '../store';
 import { canEditCharacter } from '../permissions';
 import { createId } from '../id';
 import AgilityResult from './combat/AgilityResult';
+import { useCombatDraft } from './combat/useCombatDraft';
 
 type Props = {
   snap: Snapshot;
@@ -15,7 +16,7 @@ type Props = {
 };
 const kinds = [
   ['DECLARATION', '动作声明'],
-  ['RESULT', '结果记录'],
+  ['RESULT', '结果裁定'],
   ['RULING', 'GM 裁定'],
   ['STATE', '状态备注'],
   ['SCENE', '场景事件'],
@@ -55,6 +56,8 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
     [startNote, setStartNote] = useState(''),
     [actorId, setActorId] = useState<string | null>(null),
     [targetId, setTargetId] = useState(''),
+    [actorAttribute, setActorAttribute] = useState('敏捷'),
+    [participantId, setParticipantId] = useState(''),
     [kind, setKind] = useState('DECLARATION'),
     [note, setNote] = useState(''),
     [privateRecord, setPrivate] = useState(false),
@@ -86,20 +89,27 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
     encounter ? snap.combatEvents.filter((e) => e.encounterId === encounter.id) : snap.combatEvents
   ).slice(0, 100);
   const target = snap.characters.find((c) => c.id === targetId);
+  const closing = useUI((s) => s.windows.some((w) => w.type === 'combat' && Boolean(w.motion)));
+  const draft = useCombatDraft(
+    snap,
+    me.id,
+    actor?.id,
+    targetId,
+    privateRecord,
+    closing,
+    recordInFlight.current || retrying,
+    actorAttribute,
+  );
   const automatic = kind === 'DECLARATION' && actor && target && actor.id !== target.id;
-  const preview = !automatic
+  const preview = !draft.valid
     ? kind !== 'DECLARATION'
-      ? '此类型仅保存记录，不执行对抗。'
+      ? '未关联目标时仅保存文字记录。'
       : !actor
         ? '请选择声明角色。'
         : !target
           ? '未选择关联目标，仅保存普通行动记录。'
           : '同一角色不能与自己对抗。'
-    : !actor.derived?.agility
-      ? `${actor.name}缺少合法敏捷，保存普通行动记录。`
-      : !target.derived?.agility
-        ? `${target.name}缺少可见合法敏捷，保存普通行动记录。`
-        : `将由服务器独立投掷双方 D20，比较敏捷属性加值 + D20，结果小于等于 0 按 1 计；相等时闪避。`;
+    : `服务器使用${actorAttribute}对抗目标敏捷，沿用敏捷加值表 + D20，结果最低 1，相等时闪避；保存复用本次结果。`;
   async function saveRecord() {
     if (recordInFlight.current) return;
     recordInFlight.current = true;
@@ -109,8 +119,10 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
         kind,
         actorId: actor?.id || undefined,
         targetId: targetId || undefined,
+        actorAttribute,
         note: note.trim(),
         visibility: privateRecord ? 'PRIVATE' : 'PUBLIC',
+        ...(draft.valid ? draft.fields : {}),
       },
     };
     pendingRecord.current = pending;
@@ -122,11 +134,14 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
       setRetrying(false);
       setLastRecord(result);
       setNote('');
+      setTargetId('');
+      draft.committed();
     } catch (e) {
       const cause = e as Error & { status?: number };
       if (cause.status && cause.status < 500) pendingRecord.current = null;
       setRetrying(Boolean(pendingRecord.current));
       setError(cause.message);
+      if (cause.status === 409) draft.refresh();
     } finally {
       recordInFlight.current = false;
       setBusy(false);
@@ -282,8 +297,8 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
               <select
                 className="input"
                 aria-label="添加遭遇参与者"
-                value={targetId}
-                onChange={(e) => setTargetId(e.target.value)}
+                value={participantId}
+                onChange={(e) => setParticipantId(e.target.value)}
               >
                 <option value="">添加参与者</option>
                 {snap.characters
@@ -296,8 +311,8 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
               </select>
               <button
                 className="btn whitespace-nowrap"
-                disabled={!targetId || busy}
-                onClick={() => void run('combat.add', { characterId: targetId, version: encounter.version })}
+                disabled={!participantId || busy}
+                onClick={() => void run('combat.add', { characterId: participantId, version: encounter.version })}
               >
                 <Plus size={14} />
                 加入
@@ -327,7 +342,7 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
               {kinds
                 .filter(
                   ([value]) =>
-                    ['DECLARATION', 'RESULT', 'RULING', 'STATE', 'SCENE', 'NOTE'].includes(value) &&
+                    ['DECLARATION', 'RESULT', 'RULING', 'NOTE'].includes(value) &&
                     (isGM || !['RULING', 'SCENE'].includes(value)),
                 )
                 .map(([value, label]) => (
@@ -371,6 +386,22 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
               ))}
             </select>
           </label>
+          <label>
+            <span className="label">判定</span>
+            <select
+              className="input"
+              aria-label="判定"
+              disabled={busy || retrying}
+              value={actorAttribute}
+              onChange={(e) => setActorAttribute(e.target.value)}
+            >
+              {contestAttributes.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
           {isGM && (
             <label className="flex gap-2 items-center tiny">
               <input
@@ -389,16 +420,34 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
           className="input min-h-20"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="例如：我挥剑攻击。动作声明关联双方敏捷时自动对抗；伤害请由 GM 另行裁定。"
+          placeholder="例如：我挥剑攻击。关联合法敏捷双方时使用本次对抗；伤害请由 GM 另行裁定。"
         />
         <button
           className="btn btn-primary"
-          disabled={busy || (!retrying && !note.trim() && !automatic)}
+          disabled={busy || (!retrying && ((!note.trim() && !automatic) || (draft.valid && !draft.ready)))}
           onClick={() => void saveRecord()}
         >
           {retrying ? '重试保存上次记录' : '保存记录'}
         </button>
         <p className="tiny subtle">{retrying ? '上次保存结果尚未确认，重试会沿用原操作，不会重复投骰。' : preview}</p>
+        {draft.pending && (
+          <p role="status" className="tiny text-amber-200">
+            正在等待服务器生成临时敏捷判定…
+          </p>
+        )}
+        {draft.value?.skippedReason && (
+          <p className="tiny subtle">
+            本次临时判定：{draft.value.skippedReason.replace('，已保存普通行动记录。', '。')}
+          </p>
+        )}
+        {draft.error && (
+          <p role="alert" className="tiny text-red-300">
+            {draft.error}{' '}
+            <button className="btn tiny" onClick={draft.refresh}>
+              重试判定
+            </button>
+          </p>
+        )}
         {lastRecord?.data?.contest && <AgilityResult contest={lastRecord.data.contest} recordId={lastRecord.id} />}
         {lastRecord?.data?.skippedReason && (
           <p role="status" className="tiny text-amber-200">
@@ -443,9 +492,10 @@ export default function ManualCombat({ snap, me, isGM, mutate }: Props) {
             <div key={event.id} className="grid-card tiny combat-event">
               <div className="tiny subtle mb-2">
                 记录者：
-                {event.user?.username ||
-                  snap.members.find((member) => member.userId === event.userId)?.user?.username ||
-                  '已离开的玩家'}
+                {roomMemberName(
+                  snap.members.find((member) => member.userId === event.userId),
+                  event.user?.username || '已离开的玩家',
+                )}
                 {event.actorId && ` · 行动角色：${event.data?.contest?.attacker.name || nameOf(snap, event.actorId)}`}
                 {event.targetId && ` → ${event.data?.contest?.defender.name || nameOf(snap, event.targetId)}`}
               </div>

@@ -11,7 +11,9 @@ function fixture(privateRoll = false) {
   const room = { publicDiceAvailableAt: new Date(11_000) };
   const db = {
     room: { findUniqueOrThrow: vi.fn(async () => room), update: vi.fn() },
-    user: { findUniqueOrThrow: vi.fn(async () => ({ username: '真实名称' })) },
+    roomMember: {
+      findUnique: vi.fn(async () => ({ displayName: null as string | null, user: { username: '真实名称' } })),
+    },
     diceRoll: { create: vi.fn(async ({ data }) => ({ id: 'record', ...data })) },
   };
   const args = {
@@ -25,6 +27,14 @@ function fixture(privateRoll = false) {
   return { db, tx: db as unknown as Prisma.TransactionClient, args, room };
 }
 describe('公开骰事务与身份快照', () => {
+  it('使用本房间名称生成新快照，改名不回写已经生成的结果', async () => {
+    const { tx, db, args } = fixture(true);
+    db.roomMember.findUnique.mockResolvedValue({ displayName: '守秘人', user: { username: 'GM21' } });
+    const original = await recordFreeRoll(tx, args);
+    db.roomMember.findUnique.mockResolvedValue({ displayName: '新名字', user: { username: 'GM21' } });
+    expect((await recordFreeRoll(tx, args)).rollerName).toBe('新名字');
+    expect(original.rollerName).toBe('守秘人');
+  });
   it('冷却先拒绝，不调用随机数，不生成记录或改变截止时间', async () => {
     const { tx, db, args } = fixture();
     await expect(recordFreeRoll(tx, args)).rejects.toMatchObject({

@@ -1,4 +1,4 @@
-import { characterIsIncapacitated, characterCurrentHealth } from '@dnd/shared';
+import { characterIsIncapacitated, characterCurrentHealth, inventoryCapacity, firstInventorySpace } from '@dnd/shared';
 import { memberCan } from '../permissions.js';
 import { fail as bad } from '../http.js';
 import { json, str, required, characterIn, version } from './helpers.js';
@@ -67,9 +67,7 @@ export async function tradeOperation(context: OperationContext) {
         })
       )
         bad(409, '原角色生命归零，请改用拾取物品');
-      const pos = Array.from({ length: target.inventorySlots }, (_, i) => i).find(
-        (i) => !target.inventory.some((e) => e.position === i),
-      );
+      const pos = firstInventorySpace(inventoryCapacity(room, target), target.inventory);
       if (pos === undefined) bad(409, '接收方背包已满');
       const claimed = await tx.tradeRequest.updateMany({
         where: { id: trade!.id, status: 'PENDING' },

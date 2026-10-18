@@ -7,14 +7,27 @@ import type { Snapshot } from '../api';
 import { canEditCharacter } from '../permissions';
 import Ruler from './Ruler';
 import CharacterHoverCard from './CharacterHoverCard';
+import { useHoverPreview, type HoverAnchor } from './HoverCard';
+import { StateHoverCard } from './character-tags/StateDetailsContent';
 import { characterHealth, characterShield } from './character-summary';
 import type { WindowType } from '../store';
-import { worldPoint, rulerPixels, rulerAuthorColors, sortCharacterTags, type CharacterTag } from '@dnd/shared';
+import {
+  worldPoint,
+  rulerPixels,
+  rulerAuthorColors,
+  sortCharacterTags,
+  stateDisplayName,
+  roomMemberName,
+  type CharacterTag,
+} from '@dnd/shared';
 import { snapRulerOrigin, TOKEN_RADIUS } from './ruler-snap';
 import type { TokenMovementChannel } from './token-motion';
 import { useTokenMotion } from './useTokenMotion';
 import { useStrokeEraser } from './useStrokeEraser';
 import DrawingHistoryControls from './DrawingHistoryControls';
+import RulerPreview from './RulerPreview';
+import './map-feedback.css';
+import { mapImageUrl } from './map-assets';
 
 const imageUrl = (url?: string | null) => (url?.startsWith('/') ? url : url || '');
 function useImage(src?: string | null) {
@@ -45,11 +58,15 @@ function Token({
   onMenu,
   onTag,
   onTags,
+  onTagHover,
+  onTagHoverEnd,
   health,
   shield,
   onHover,
   onHoverEnd,
   movements,
+  selected,
+  onSelect,
 }: {
   token: any;
   character: any;
@@ -58,10 +75,14 @@ function Token({
   scale: number;
   onMove: (x: number, y: number, version: number, id: string) => Promise<any>;
   movements: TokenMovementChannel;
+  selected: boolean;
+  onSelect: () => void;
   onOpen: () => void;
   onMenu: (x: number, y: number) => void;
   onTag: (id: string) => void;
   onTags: () => void;
+  onTagHover: (id: string, x: number, y: number) => void;
+  onTagHoverEnd: () => void;
   health: ReturnType<typeof characterHealth>;
   shield: ReturnType<typeof characterShield>;
   onHover: (x: number, y: number) => void;
@@ -100,14 +121,14 @@ function Token({
   };
   const marks = sorted.slice(0, 3).map((t) => ({
     id: t.id,
-    label: t.definition.name,
+    label: stateDisplayName(t.definition.name, t.romanNumeral),
     glyph: glyphs[t.definition.icon] || t.definition.icon,
     color: t.definition.color,
   }));
   if (sorted.length > 3)
     marks.push({
       id: 'overflow',
-      label: `查看全部 ${sorted.length} 个可见标签`,
+      label: `查看全部 ${sorted.length} 个可见状态`,
       glyph: `+${sorted.length - 3}`,
       color: '#c69452',
     });
@@ -156,6 +177,7 @@ function Token({
         y={motion.initial.y}
         draggable={canMove}
         onDragStart={(e) => {
+          onSelect();
           onHoverEnd();
           if (!motion.dragStart()) e.target.stopDrag();
         }}
@@ -168,9 +190,26 @@ function Token({
       >
         <Group
           ref={motion.avatar}
+          onClick={(event) => {
+            event.cancelBubble = true;
+            onSelect();
+          }}
+          onTap={(event) => {
+            event.cancelBubble = true;
+            onSelect();
+          }}
           onMouseEnter={(event) => onHover(event.evt.clientX, event.evt.clientY)}
           onMouseLeave={onHoverEnd}
         >
+          {selected && (
+            <Circle
+              name="token-selection-ring"
+              radius={TOKEN_RADIUS + 4 / scale}
+              stroke="#e4bd78"
+              strokeWidth={1.5 / scale}
+              listening={false}
+            />
+          )}
           <Circle
             ref={motion.shadow}
             radius={TOKEN_RADIUS}
@@ -245,6 +284,7 @@ function Token({
         {marks.map((mark, i) => (
           <Group
             key={mark.id}
+            name="token-state-badge"
             x={i === 2 || i === 3 ? -25 : 25}
             y={i === 1 || i === 3 ? 16 : -23}
             onMouseDown={(e) => {
@@ -264,13 +304,16 @@ function Token({
               else onTag(mark.id);
             }}
             onMouseEnter={(e) => {
+              e.cancelBubble = true;
+              if (mark.id !== 'overflow') onTagHover(mark.id, e.evt.clientX, e.evt.clientY);
               const container = e.target.getStage()?.container();
               if (container) {
-                container.title = mark.label;
-                container.style.cursor = 'pointer';
+                container.title = mark.id === 'overflow' ? mark.label : '';
+                container.style.cursor = 'var(--room-cursor, pointer)';
               }
             }}
             onMouseLeave={(e) => {
+              onTagHoverEnd();
               const container = e.target.getStage()?.container();
               if (container) {
                 container.title = '';
@@ -310,6 +353,7 @@ export default function Board({
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage>(null);
   const drawingLayer = useRef<Konva.Layer>(null);
+  const preview = useRef<Konva.Group>(null);
   const [size, setSize] = useState({ w: 1000, h: 700 });
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [menu, setMenu] = useState<{ x: number; y: number; token: any } | null>(null);
@@ -319,14 +363,24 @@ export default function Board({
   const [brushSize, setBrushSize] = useState(4);
   const [brushColor, setBrushColor] = useState('#f3c268');
   const active = snap.maps.find((m) => m.id === snap.room.activeMapId);
-  const bg = useImage(active?.imageUrl);
+  const bg = useImage(mapImageUrl(active?.imageUrl));
   const self = snap.members.find((m) => m.userId === me.id);
   const canDraw = self?.role === 'GM' || self?.permissions?.draw === true;
   const eraser = useStrokeEraser(active?.id, tool === 'eraser' && canDraw, drawingLayer, stage, mutate);
   const [hovered, setHovered] = useState<{ tokenId: string; x: number; y: number } | null>(null),
     hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [hoveredRuler, setHoveredRuler] = useState<{ id: string; x: number; y: number } | null>(null);
+  const stateHover = useHoverPreview<HoverAnchor>();
+  const hoveredState =
+    tool === 'pan'
+      ? snap.characterTags.find(
+          (tag) =>
+            tag.id === stateHover.preview?.id &&
+            snap.tokens.some((token) => token.characterId === tag.characterId && token.mapId === active?.id),
+        )
+      : undefined;
   const stopHover = () => {
+    stateHover.close();
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
     hoverTimer.current = undefined;
     setHovered(null);
@@ -368,22 +422,40 @@ export default function Board({
     } catch {}
   }
   const [selectedRuler, setSelectedRuler] = useState<string | null>(null);
-  useEffect(() => setSelectedRuler(null), [active?.id]);
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  useEffect(() => {
+    stopHover();
+    preview.current?.hide();
+  }, [tool]);
+  useEffect(() => {
+    setSelectedRuler(null);
+    setSelectedToken(null);
+    stateHover.close();
+    preview.current?.hide();
+  }, [active?.id]);
   useEffect(() => {
     if (selectedRuler && !snap.drawings.some((drawing) => drawing.id === selectedRuler)) setSelectedRuler(null);
-  }, [selectedRuler, snap.drawings]);
+    if (selectedToken && !snap.tokens.some((token) => token.id === selectedToken && token.mapId === active?.id))
+      setSelectedToken(null);
+  }, [selectedRuler, snap.drawings, selectedToken, snap.tokens, active?.id]);
   useEffect(() => {
-    if (!selectedRuler) return;
+    if (!selectedRuler && !selectedToken && tool !== 'ruler') return;
     const close = (event: KeyboardEvent) => {
       if (
         event.key === 'Escape' &&
         !(event.target instanceof HTMLElement && event.target.closest('input,textarea,select,[contenteditable="true"]'))
-      )
+      ) {
         setSelectedRuler(null);
+        setSelectedToken(null);
+        if (tool === 'ruler') {
+          setTool('pan');
+          setMeasure(null);
+        }
+      }
     };
     window.addEventListener('keydown', close);
     return () => window.removeEventListener('keydown', close);
-  }, [selectedRuler]);
+  }, [selectedRuler, selectedToken, tool]);
   useEffect(() => {
     if (!host.current) return;
     const observer = new ResizeObserver((entries) =>
@@ -409,6 +481,7 @@ export default function Board({
     return p ? worldPoint(p, view) : null;
   }
   function wheel(e: Konva.KonvaEventObject<WheelEvent>) {
+    preview.current?.hide();
     e.evt.preventDefault();
     eraser.cancel();
     stopHover();
@@ -420,7 +493,9 @@ export default function Board({
     setView({ x: p.x - point.x * next, y: p.y - point.y * next, scale: next });
   }
   function down(e: Konva.KonvaEventObject<MouseEvent>) {
+    preview.current?.hide();
     stopHover();
+    if (!e.target.findAncestor('.map-token', true)) setSelectedToken(null);
     if (!e.target.findAncestor('.ruler', true)) setSelectedRuler(null);
     if (!active || e.evt.button !== 0) return;
     if (tool === 'eraser') {
@@ -444,6 +519,14 @@ export default function Board({
     if (tool === 'pen' && canDraw) setDraft([p.x, p.y]);
   }
   function move() {
+    if (tool === 'ruler' && measure && active && preview.current) {
+      const point = pointer();
+      if (point) {
+        preview.current.position(snapOrigin(point));
+        preview.current.show();
+      }
+      return;
+    }
     if (tool === 'eraser') {
       eraser.move();
       return;
@@ -479,7 +562,7 @@ export default function Board({
   const tokenActions = menu
     ? [
         { label: '查看人物卡', run: () => open('character', menu.token.characterId) },
-        { label: '查看角色标签', run: () => open('character-tags', menu.token.characterId) },
+        { label: '查看角色状态', run: () => open('character-tags', menu.token.characterId) },
         ...(self?.role === 'GM'
           ? [
               { label: '不显示当前人物', run: () => mutate('token.delete', { id: menu.token.id }) },
@@ -500,7 +583,13 @@ export default function Board({
       onDrop={(event) => void drop(event).catch(() => {})}
       onContextMenu={(e) => e.preventDefault()}
       onClick={() => menu && setMenu(null)}
-      onMouseLeave={() => void eraser.finish()}
+      onMouseLeave={() => {
+        preview.current?.hide();
+        void eraser.finish();
+      }}
+      onMouseMoveCapture={(event) => {
+        if ((event.target as HTMLElement).closest('.board-tools')) preview.current?.hide();
+      }}
     >
       <Stage
         ref={stage}
@@ -591,14 +680,36 @@ export default function Board({
                 <Token
                   key={t.id}
                   token={t}
+                  selected={selectedToken === t.id}
+                  onSelect={() => {
+                    if (tool === 'pan') setSelectedToken(t.id);
+                  }}
                   movements={movements}
                   character={c}
                   tags={snap.characterTags.filter((tag) => tag.characterId === t.characterId)}
-                  onTag={(id) => open('tag-detail', id)}
+                  onTag={(id) => {
+                    stateHover.close();
+                    open('tag-detail', id);
+                  }}
                   onTags={() => open('character-tags', t.characterId)}
+                  onTagHover={(id, x, y) => {
+                    stopHover();
+                    if (tool !== 'pan') return;
+                    const canvas = stage.current?.container();
+                    if (!canvas) return;
+                    stateHover.show(id, {
+                      get isConnected() {
+                        return canvas.isConnected;
+                      },
+                      getBoundingClientRect: () => new DOMRect(x - 10, y - 10, 20, 20),
+                    });
+                  }}
+                  onTagHoverEnd={stateHover.leave}
                   health={c ? characterHealth(snap, c) : null}
                   shield={c ? characterShield(snap, c) : null}
                   onHover={(x, y) => {
+                    stateHover.close();
+                    if (tool !== 'pan') return;
                     holdHover();
                     const box = host.current!.getBoundingClientRect(),
                       point = stage.current?.findOne('#' + t.id)?.getAbsolutePosition() || {
@@ -619,6 +730,7 @@ export default function Board({
                   onMove={(x, y, version, id) => mutate('token.move', { id: t.id, x, y, version }, id)}
                   onOpen={() => open('character', t.characterId)}
                   onMenu={(x, y) => {
+                    setSelectedToken(t.id);
                     stopHover();
                     setMenu({ x, y, token: t });
                   }}
@@ -654,6 +766,18 @@ export default function Board({
               />
             ))}
         </Layer>
+        {active && tool === 'ruler' && measure && (
+          <Layer listening={false}>
+            <RulerPreview
+              ref={preview}
+              shape={measure.shape}
+              distance={measure.distance}
+              length={rulerPixels(measure.distance, active.scalePixels, active.scaleUnits)}
+              angle={snap.room.rules?.coneAngle || 60}
+              scale={view.scale}
+            />
+          </Layer>
+        )}
       </Stage>
       {hoveredRuler &&
         (() => {
@@ -663,8 +787,10 @@ export default function Board({
           const author =
             drawing &&
             (drawing.data.authorName ||
-              snap.members.find((member) => member.userId === drawing.authorId)?.user.username ||
-              '已离开的玩家');
+              roomMemberName(
+                snap.members.find((member) => member.userId === drawing.authorId),
+                '已离开的玩家',
+              ));
           return drawing ? (
             <div
               role="tooltip"
@@ -676,6 +802,11 @@ export default function Board({
             </div>
           ) : null;
         })()}
+      <StateHoverCard
+        hover={stateHover}
+        tag={hoveredState}
+        characterName={characters.get(hoveredState?.characterId || '')?.name}
+      />
       {hovered &&
         snap.tokens.some((token) => token.id === hovered.tokenId && token.mapId === active?.id) &&
         (() => {
@@ -784,6 +915,26 @@ export default function Board({
                 量尺
               </button>
             </div>
+            <div className="map-tool-status" key={tool} role="status">
+              <strong>{{ pan: '平移地图', pen: '画笔', eraser: '整笔擦除', ruler: '放置量尺' }[tool]}</strong>
+              {' · '}
+              {tool === 'pan'
+                ? '拖动空白处平移，单击棋子选中'
+                : tool === 'pen'
+                  ? '按住拖动绘画'
+                  : tool === 'eraser'
+                    ? '拖过笔画擦除，Esc 取消'
+                    : '虚线预览落点，单击放置，Esc 取消'}
+            </div>
+            {selectedToken && (
+              <div className="map-selection-label">
+                已选中：
+                <span>
+                  {characters.get(snap.tokens.find((token) => token.id === selectedToken)?.characterId || '')?.name ||
+                    '角色'}
+                </span>
+              </div>
+            )}
             {tool === 'ruler' && measure && (
               <div className="flex gap-2 items-center mt-2">
                 <select

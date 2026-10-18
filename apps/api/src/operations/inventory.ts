@@ -5,7 +5,12 @@ import {
   characterIsIncapacitated,
   characterCurrentHealth,
   isWearable,
+  withBackpackSlot,
   equipmentFitsSlot,
+  inventoryCapacity,
+  firstInventorySpace,
+  equipmentAtSlot,
+  equipmentConflicts,
 } from '@dnd/shared';
 import { array, object } from '../data.js';
 import { refreshCharacter } from '../character-values.js';
@@ -25,16 +30,15 @@ export async function inventoryOperation(context: OperationContext) {
       if (!memberCan(room, member!, 'inventoryAdd')) bad(403, 'GM 尚未授权从物品库加入背包');
       const item = await tx.itemDefinition.findFirst({ where: { id: str(p.itemId), roomId } });
       if (!item) bad(404, '物品不存在');
-      const occupied = new Set(c.inventory.map((e) => e.position));
-      const position =
-        p.position !== undefined
-          ? num(p.position)
-          : Array.from({ length: c.inventorySlots }, (_, i) => i).find((i) => !occupied.has(i));
+      const occupied = new Set(c.inventory.filter((e) => e.position >= 0).map((e) => e.position));
+      const capacity = inventoryCapacity(room, c);
+      const position = p.position !== undefined ? num(p.position) : firstInventorySpace(capacity, c.inventory);
       if (
         position === undefined ||
         !Number.isInteger(position) ||
         position < 0 ||
-        position >= c.inventorySlots ||
+        position >= capacity ||
+        occupied.size >= capacity ||
         occupied.has(position)
       )
         bad(409, '背包没有可用栏位');
@@ -68,7 +72,7 @@ export async function inventoryOperation(context: OperationContext) {
       version(source.version, p.version);
       if (source.position < 0) bad(409, '已穿戴物品请从装备栏拖回背包');
       const position = Number(p.position);
-      if (!Number.isInteger(position) || position < 0 || position >= entry!.character.inventorySlots)
+      if (!Number.isInteger(position) || position < 0 || position >= inventoryCapacity(room, entry!.character))
         bad(400, '背包格子无效');
       if (position === source.position) {
         data = source;
@@ -95,7 +99,38 @@ export async function inventoryOperation(context: OperationContext) {
       });
       break;
     }
+    case 'inventory.delete': {
+      const entry = await tx.inventoryEntry.findFirst({
+        where: { id: required(p.id, '物品 ID'), character: { roomId } },
+        include: { character: true, equipped: true },
+      });
+      if (!entry) return bad(404, '背包物品不存在');
+      inventoryEditable(entry.character);
+      if (!Number.isInteger(p.version)) bad(400, '缺少物品版本号');
+      version(entry.version, p.version);
+      const worn = entry.equipped.length,
+        available = entry.quantity - worn;
+      if (!Number.isSafeInteger(p.quantity) || p.quantity < 1) bad(400, '删除数量无效');
+      if (available < 1 || p.quantity !== available) bad(409, '背包数量或穿戴状态已变化，请重新选择物品');
+      const claimed = worn
+        ? await tx.inventoryEntry.updateMany({
+            where: { id: entry.id, version: entry.version },
+            data: { quantity: worn, version: { increment: 1 } },
+          })
+        : await tx.inventoryEntry.deleteMany({ where: { id: entry.id, version: entry.version } });
+      if (!claimed.count) bad(409, '物品已变化，请刷新后重试');
+      await tx.tradeRequest.updateMany({
+        where: { entryId: entry.id, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
+      inventoryCharacters.add(entry.characterId);
+      data = !worn
+        ? { id: entry.id, deleted: true }
+        : await tx.inventoryEntry.findUniqueOrThrow({ where: { id: entry.id } });
+      break;
+    }
     case 'inventory.update': {
+      if (member.role !== 'GM') bad(403, '物品信息和数量仅 GM 可修改；移除背包物品请使用删除操作');
       const entry: any = await tx.inventoryEntry.findFirst({
         where: { id: str(p.id), character: { roomId } },
         include: { character: true, equipped: true },
@@ -118,6 +153,7 @@ export async function inventoryOperation(context: OperationContext) {
       break;
     }
     case 'inventory.instance.update': {
+      if (member.role !== 'GM') bad(403, '物品信息仅 GM 可修改');
       const entry = await tx.inventoryEntry.findFirst({
         where: { id: str(p.id), character: { roomId } },
         include: { character: true, equipped: true },
@@ -193,18 +229,33 @@ export async function inventoryOperation(context: OperationContext) {
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > entry!.quantity) bad(400, '转移数量无效');
       const sourceSlot = str(p.sourceSlot || p.slot),
         targetSlot = str(p.targetSlot);
-      const selected = sourceSlot ? entry!.equipped.find((e) => e.slot === sourceSlot) : undefined;
+      const selected = sourceSlot
+        ? equipmentAtSlot(
+            entry!.equipped.map((e) => ({ ...e, entryId: entry!.id })),
+            [entry!],
+            sourceSlot,
+          )
+        : undefined;
       if (sourceSlot && !selected) bad(409, '该部位的装备已变化，请刷新');
       if ((sourceSlot || targetSlot) && quantity !== 1) bad(400, '每次转移一件装备');
       if (targetSlot) {
-        if (!array(currentRoom.equipmentSlots).includes(targetSlot)) bad(400, '装备槽无效');
-        if (!isWearable(entry!.item.kind) || !equipmentFitsSlot(entry!.item.compatibleSlots, targetSlot))
+        if (!withBackpackSlot(array(currentRoom.equipmentSlots)).includes(targetSlot)) bad(400, '装备槽无效');
+        if (
+          !isWearable(entry!.item.kind) ||
+          !equipmentFitsSlot(entry!.item.compatibleSlots, targetSlot, entry!.item.kind)
+        )
           bad(400, '物品与目标装备部位不兼容');
-        const worn = target.equipment.find((e) => e.slot === targetSlot);
+        if (
+          entry!.item.kind === '双手武器' &&
+          !['主手', '副手'].every((s) => withBackpackSlot(array(currentRoom.equipmentSlots)).includes(s))
+        )
+          bad(400, '双手武器需要主手和副手两个装备部位');
+        const worn = equipmentAtSlot(target.equipment, target.inventory, targetSlot);
         if (p.targetEquipmentId !== undefined && (worn?.id || null) !== p.targetEquipmentId)
           bad(409, '目标部位装备已变化，请刷新');
       }
       const same = entry!.characterId === target.id;
+      const targetCapacity = inventoryCapacity(currentRoom, target);
       inventoryCharacters.add(entry!.characterId);
       inventoryCharacters.add(target.id);
       if (same && !sourceSlot && !targetSlot) bad(400, '同一背包内请使用整理操作');
@@ -213,22 +264,20 @@ export async function inventoryOperation(context: OperationContext) {
         const requested = p.position === undefined ? undefined : Number(p.position);
         if (
           requested !== undefined &&
-          (!Number.isSafeInteger(requested) || requested < 0 || requested >= target.inventorySlots)
+          (!Number.isSafeInteger(requested) || requested < 0 || requested >= targetCapacity)
         )
           bad(400, '目标背包格无效');
         if (requested !== undefined && target.inventory.some((e) => e.position === requested))
           bad(409, '目标格已有物品，请选择空格');
         position = targetSlot
           ? equippedPosition(target.inventory)
-          : (requested ??
-            Array.from({ length: target.inventorySlots }, (_, i) => i).find(
-              (i) => !target.inventory.some((e) => e.position === i),
-            )!);
+          : (requested ?? firstInventorySpace(targetCapacity, target.inventory)!);
+        if (!targetSlot && firstInventorySpace(targetCapacity, target.inventory) === undefined)
+          bad(409, '目标背包已满');
         if (position === undefined) bad(409, '目标背包已满');
       } else if (p.position !== undefined) {
         position = Number(p.position);
-        if (!Number.isSafeInteger(position) || position < 0 || position >= target.inventorySlots)
-          bad(400, '目标背包格无效');
+        if (!Number.isSafeInteger(position) || position < 0 || position >= targetCapacity) bad(400, '目标背包格无效');
         if (target.inventory.some((e) => e.position === position && e.id !== entry!.id))
           bad(409, '目标格已有物品，请选择空格');
       }
@@ -253,7 +302,8 @@ export async function inventoryOperation(context: OperationContext) {
             data: { characterId: target.id, itemId: entry!.itemId, quantity, position, data: json(entry!.data) },
           });
       if (targetSlot) {
-        await tx.equippedItem.deleteMany({ where: { characterId: target.id, slot: targetSlot } });
+        const conflicts = equipmentConflicts(target.equipment, target.inventory, targetSlot, entry!.item.kind);
+        await tx.equippedItem.deleteMany({ where: { id: { in: conflicts.map((e) => e.id) } } });
         if (same && (await tx.equippedItem.count({ where: { entryId: entry!.id } })) >= entry!.quantity)
           bad(409, '没有可穿戴的剩余数量');
         await tx.equippedItem.create({ data: { characterId: target.id, entryId: data.id, slot: targetSlot } });
@@ -271,14 +321,21 @@ export async function inventoryOperation(context: OperationContext) {
       const c = await characterIn(tx, roomId, required(p.characterId, '角色 ID'));
       inventoryEditable(c);
       const slot = required(p.slot, '装备槽');
-      if (!array(room.equipmentSlots).includes(slot)) bad(400, '装备槽无效');
+      if (!withBackpackSlot(array(room.equipmentSlots)).includes(slot)) bad(400, '装备槽无效');
       inventoryCharacters.add(c.id);
-      await tx.equippedItem.deleteMany({ where: { characterId: c.id, slot } });
+      const incoming = c.inventory.find((e) => e.id === p.entryId);
+      const conflicts = equipmentConflicts(c.equipment, c.inventory, slot, incoming?.item.kind);
+      await tx.equippedItem.deleteMany({ where: { id: { in: conflicts.map((e) => e.id) } } });
       if (p.entryId) {
         const entry: any = c.inventory.find((e) => e.id === p.entryId);
         if (!entry) bad(404, '背包物品不存在');
-        if (!isWearable(entry.item.kind)) bad(400, '仅装备或饰品类物品可穿戴');
-        if (!equipmentFitsSlot(entry.item.compatibleSlots, slot)) bad(400, '装备与槽位不兼容');
+        if (!isWearable(entry.item.kind)) bad(400, '仅装备、双手武器、背包或饰品类物品可穿戴');
+        if (!equipmentFitsSlot(entry.item.compatibleSlots, slot, entry.item.kind)) bad(400, '装备与槽位不兼容');
+        if (
+          entry.item.kind === '双手武器' &&
+          !['主手', '副手'].every((s) => withBackpackSlot(array(room.equipmentSlots)).includes(s))
+        )
+          bad(400, '双手武器需要主手和副手两个装备部位');
         const used = await tx.equippedItem.count({ where: { entryId: entry.id } });
         if (used >= entry.quantity) bad(409, '物品数量不足');
         await tx.equippedItem.create({ data: { characterId: c.id, entryId: entry.id, slot } });

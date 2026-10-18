@@ -571,7 +571,11 @@ test('私密线索阶段 C/E：导演台素材复制、放映标签并存与旧�
   await expect(compose.getByLabel('线索正文', { exact: true })).toHaveValue('既有放映说明');
   await expect(compose.locator('.clue-attachment')).toHaveCount(1);
   await expect(compose.getByLabel(t.users[1].username, { exact: false })).not.toBeChecked();
+  // Close the foreground composer before closing the receipt, then restore its saved draft.
+  await closeWindow(gm, '关闭私密线索');
+  await expect(compose).toHaveCount(0);
   await closeWindow(gm, '关闭线索投递回执');
+  await openClues(gm);
   await compose.getByLabel(t.users[2].username, { exact: false }).check();
   await compose.getByRole('button', { name: '私密发送给 1 人', exact: true }).click();
   await expect(compose.getByRole('status')).toContainText('已私密发送');
@@ -586,8 +590,9 @@ test('私密线索阶段 C/E：导演台素材复制、放映标签并存与旧�
   const box = (await a.locator('.window').boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(900);
-  await a.locator('.window-title').getByRole('button', { name: '最小化私密线索', exact: true }).click();
-  await expect(a.locator('.private-clues')).not.toBeVisible();
+  await expect(a.getByRole('button', { name: /^最小化/ })).toHaveCount(0);
+  await a.locator('.window-title').getByRole('button', { name: '关闭私密线索', exact: true }).click();
+  await expect(a.locator('.private-clues')).toHaveCount(0);
   await a.locator('.game-rail button[title="私密线索"]').click();
   await expect(a.locator('.private-clues')).toBeVisible();
   await a.screenshot({ path: 'test-results/private-clues-narrow-desktop.png', animations: 'disabled' });
@@ -674,4 +679,125 @@ test('私密线索恢复：通知丢失与旧列表迟到不能覆盖新未读�
     release();
     await a.unroute('**/private-clues/inbox');
   }
+});
+
+test('私密线索动效：单次拆封、连续投递、正文稳定、焦点与减少动效', async ({ table: t }, info) => {
+  test.setTimeout(120000);
+  const [gm, a, b, c] = t.pages,
+    [gmc, ac, bc, cc] = t.contexts;
+  const errors: string[] = [];
+  for (const page of t.pages) page.on('pageerror', (error) => errors.push(error.message));
+  await b.setViewportSize({ width: 900, height: 700 });
+  await b.emulateMedia({ reducedMotion: 'reduce' });
+  await Promise.all(t.pages.map((page) => page.goto(`/rooms/${t.room.id}`)));
+  for (const page of t.pages) await expect(page.getByTitle('已连接', { exact: true })).toBeVisible();
+  await openClues(a);
+  const search = a.getByLabel('搜索私人线索', { exact: true });
+  await search.fill('未完成的检索');
+  await a.evaluate(() => {
+    (window as any).__sealStarts = 0;
+    document.addEventListener('animationstart', (event) => {
+      if ((event.target as Element).matches('.clue-envelope-flap')) (window as any).__sealStarts++;
+    });
+  });
+  const input = {
+    id: randomUUID(),
+    title: '封蜡信件',
+    bodyMarkdown: '沿着月光找到旧塔，保留这封信。'.repeat(150),
+    recipientUserIds: [t.users[1].id, t.users[2].id],
+  };
+  await post(gmc, t.base + '/send', input);
+  const notice = a.locator('.private-clue-notice'),
+    mark = notice.locator('.clue-notice-envelope');
+  await expect(notice).toBeVisible();
+  await expect(mark).toHaveAttribute('aria-hidden', 'true');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('未完成的检索');
+  await expect(a.locator('.private-clue-reader')).toHaveCount(0);
+  await expect(a.getByLabel('1 条未读私密线索', { exact: true })).toBeVisible();
+  const firstNoticeId = await notice.getAttribute('data-notice-id');
+  await expect.poll(() => a.evaluate(() => (window as any).__sealStarts)).toBe(1);
+  expect((await get(ac, t.base + '/inbox')).items[0].readAt).toBeNull();
+  expect((await get(bc, t.base + '/inbox')).items[0].readAt).toBeNull();
+  await expect(b.locator('.private-clue-notice')).toBeVisible();
+  const reducedNoticeBox = (await b.locator('.private-clue-notice').boundingBox())!;
+  expect(reducedNoticeBox.x + reducedNoticeBox.width).toBeLessThanOrEqual(900);
+  expect(await b.locator('.clue-envelope-flap').evaluate((node) => getComputedStyle(node).animationName)).toBe('none');
+  await expect(c.locator('.private-clue-notice')).toHaveCount(0);
+  expect((await get(cc, t.base + '/inbox')).items).toHaveLength(0);
+  await a.screenshot({ path: info.outputPath('sealed-clue-notice.png') });
+  // A duplicate operation and ordinary refresh preserve the same decorative DOM and do not replay it.
+  await mark.evaluate((node) => ((window as any).__noticeMark = node));
+  await post(gmc, t.base + '/send', input);
+  await a.getByRole('button', { name: '刷新收件箱', exact: true }).click();
+  await expect(notice).toHaveAttribute('data-notice-id', firstNoticeId!);
+  expect(await mark.evaluate((node) => node === (window as any).__noticeMark)).toBe(true);
+  expect(await a.evaluate(() => (window as any).__sealStarts)).toBe(1);
+  await search.fill('');
+  await notice.getByRole('button', { name: '关闭私密线索通知' }).click();
+  await a.locator('.private-clue-row').filter({ hasText: input.title }).click();
+  const reader = a.locator('.private-clue-reader'),
+    body = reader.locator('.clue-reading-body');
+  await expect(body).toContainText('沿着月光找到旧塔');
+  await expect.poll(async () => (await get(ac, t.base + '/inbox')).unreadCount).toBe(0);
+  expect(await reader.evaluate((node) => getComputedStyle(node).animationName)).toBe('none');
+  await expect
+    .poll(() =>
+      reader.evaluate(
+        (node) =>
+          node
+            .closest('.window')!
+            .getAnimations()
+            .filter((a) => a.playState === 'running').length,
+      ),
+    )
+    .toBe(0);
+  const before = await body.evaluate((node) => {
+    (window as any).__readingBody = node;
+    const scroller = node.closest('.window-body')!;
+    scroller.scrollTop = 90;
+    const text = node.querySelector('p')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 8);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return { scrollTop: scroller.scrollTop, selection: selection.toString(), top: node.getBoundingClientRect().top };
+  });
+  // An equal-sized new delivery batch should open once even while a previous notice still exists.
+  await post(gmc, t.base + '/send', { ...input, id: randomUUID(), title: '第二封密信' });
+  await expect(notice).toBeVisible();
+  await expect(notice).not.toHaveAttribute('data-notice-id', firstNoticeId!);
+  await expect.poll(() => a.evaluate(() => (window as any).__sealStarts)).toBe(2);
+  const secondNoticeId = await notice.getAttribute('data-notice-id');
+  await post(gmc, t.base + '/send', { ...input, id: randomUUID(), title: '第三封密信' });
+  await expect(notice).not.toHaveAttribute('data-notice-id', secondNoticeId!);
+  await expect.poll(() => a.evaluate(() => (window as any).__sealStarts)).toBe(3);
+  await expect(a.getByLabel('2 条未读私密线索', { exact: true })).toBeVisible();
+  const after = await body.evaluate((node) => ({
+    same: node === (window as any).__readingBody,
+    scrollTop: node.closest('.window-body')!.scrollTop,
+    selection: window.getSelection()!.toString(),
+    top: node.getBoundingClientRect().top,
+    animation: getComputedStyle(node).animationName,
+    transform: getComputedStyle(node).transform,
+  }));
+  expect(after).toMatchObject({
+    same: true,
+    scrollTop: before.scrollTop,
+    selection: before.selection,
+    animation: 'none',
+    transform: 'none',
+  });
+  expect(after.top).toBeCloseTo(before.top, 1);
+  expect((await get(bc, t.base + '/inbox')).unreadCount).toBe(3);
+  await a.screenshot({ path: info.outputPath('reading-stays-still.png') });
+  await expect(notice).toHaveCount(0, { timeout: 8000 });
+  await expect(a.getByLabel('2 条未读私密线索', { exact: true })).toBeVisible();
+  await a.reload();
+  await expect(a.getByTitle('已连接', { exact: true })).toBeVisible();
+  await expect(a.locator('.private-clue-notice')).toHaveCount(0);
+  await expect(a.getByLabel('2 条未读私密线索', { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
 });

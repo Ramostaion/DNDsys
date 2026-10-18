@@ -3,6 +3,7 @@ import type { Snapshot } from '../api';
 import { useUI } from '../store';
 import { canEditCharacter } from '../permissions';
 import CharacterTagBadges, { CharacterTagManageButton } from './character-tags/CharacterTagBadges';
+import { roomMemberName } from '@dnd/shared';
 
 type Props = {
   snap: Snapshot;
@@ -101,7 +102,7 @@ export default function CharacterDirectory({ p }: { p: Props }) {
                 <option value="">暂不分配玩家</option>
                 {p.snap.members.map((member) => (
                   <option key={member.userId} value={member.userId}>
-                    {member.user.username}
+                    {roomMemberName(member)}
                     {member.role === 'GM' ? ' · GM' : ''}
                   </option>
                 ))}
@@ -173,7 +174,7 @@ export default function CharacterDirectory({ p }: { p: Props }) {
                     <option value="">未分配</option>
                     {p.snap.members.map((member) => (
                       <option key={member.userId} value={member.userId}>
-                        {member.user.username}
+                        {roomMemberName(member)}
                       </option>
                     ))}
                   </select>
@@ -189,7 +190,10 @@ export default function CharacterDirectory({ p }: { p: Props }) {
               <div className="tiny subtle mt-2">
                 {c.isNpc
                   ? 'GM 控制'
-                  : p.snap.members.find((member) => member.userId === c.ownerId)?.user?.username || '未分配'}
+                  : roomMemberName(
+                      p.snap.members.find((member) => member.userId === c.ownerId),
+                      '未分配',
+                    )}
               </div>
             )}
           </article>

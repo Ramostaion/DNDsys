@@ -1,20 +1,30 @@
-import { useState, type DragEvent } from 'react';
-import { DEFAULT_EQUIPMENT_SLOTS, isWearable, equipmentFitsSlot } from '@dnd/shared';
-import { itemFields } from './item-fields';
-import { Backpack, Shirt, Plus, Minus, ArrowRightLeft, Shield, GripVertical } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent } from 'react';
+import { DEFAULT_EQUIPMENT_SLOTS, isWearable, equipmentFitsSlot, equipmentAtSlot, withBackpackSlot } from '@dnd/shared';
+import {
+  InventoryItemDetails,
+  InventoryItemTooltip,
+  InventoryItemMenu,
+  useInventoryHover,
+} from './InventoryItemDetails';
+import TradePanel from './TradePanel';
+import { Backpack, Shirt, Plus, ArrowRightLeft, Shield, Trash2 } from 'lucide-react';
 import type { Snapshot } from '../api';
 import { useUI } from '../store';
+import { createId } from '../id';
 import { canEditCharacter, canCapability, canViewInventory, canTransferInventory } from '../permissions';
+import { inventoryDropHint, useInventoryDrag } from './inventory-drag-feedback';
+import { useDropFeedback } from './useDropFeedback';
 
 type Props = {
   snap: Snapshot;
   me: any;
   isGM: boolean;
-  mutate: (type: string, payload: Record<string, unknown>) => Promise<any>;
+  mutate: (type: string, payload: Record<string, unknown>, operationId?: string) => Promise<any>;
 };
 const slots = DEFAULT_EQUIPMENT_SLOTS;
 
 function dragEntry(event: DragEvent, p: Props, c: any, entry: any, sourceSlot?: string) {
+  useInventoryDrag.getState().set({ roomId: p.snap.room.id, characterId: c.id, entryId: entry.id, sourceSlot });
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData(
     'application/x-dnd-entry',
@@ -36,7 +46,7 @@ function transferPayload(entry: any, target: any, quantity: number, sourceSlot?:
     quantity,
     ...(sourceSlot ? { sourceSlot } : {}),
     ...(targetSlot
-      ? { targetSlot, targetEquipmentId: target.equipment.find((e: any) => e.slot === targetSlot)?.id || null }
+      ? { targetSlot, targetEquipmentId: equipmentAtSlot(target.equipment, target.inventory, targetSlot)?.id || null }
       : {}),
   };
 }
@@ -47,13 +57,14 @@ function TransferControls({ p, c, entry, sourceSlot }: { p: Props; c: any; entry
     [targetSlot, setTargetSlot] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const targets = p.snap.characters.filter(
-    (other) => other.id !== c.id && canTransferInventory(p.snap, p.me.id, c, other),
-  );
-  const target = chosen ? targets.find((other) => other.id === chosen) : targets[0];
-  const slotNames = p.snap.room.equipmentSlots?.length ? p.snap.room.equipmentSlots : slots;
+  const targets = p.snap.characters.filter((other) => canTransferInventory(p.snap, p.me.id, c, other));
+  const target = chosen
+    ? targets.find((other) => other.id === chosen)
+    : targets.find((other) => other.id === c.id) || targets[0];
+  const slotNames = withBackpackSlot(p.snap.room.equipmentSlots?.length ? p.snap.room.equipmentSlots : slots);
+  const alreadyInBackpack = !sourceSlot && !targetSlot && target?.id === c.id;
   async function send() {
-    if (!target || busy) return;
+    if (!target || busy || alreadyInBackpack) return;
     setBusy(true);
     setError('');
     try {
@@ -85,6 +96,7 @@ function TransferControls({ p, c, entry, sourceSlot }: { p: Props; c: any; entry
           {targets.map((other) => (
             <option key={other.id} value={other.id}>
               {other.name}
+              {other.id === c.id ? '（当前角色背包）' : ''}
             </option>
           ))}
         </select>
@@ -99,7 +111,7 @@ function TransferControls({ p, c, entry, sourceSlot }: { p: Props; c: any; entry
         >
           <option value="">背包</option>
           {slotNames
-            .filter((slot: string) => equipmentFitsSlot(entry.item.compatibleSlots, slot))
+            .filter((slot: string) => equipmentFitsSlot(entry.item.compatibleSlots, slot, entry.item.kind))
             .map((slot: string) => (
               <option key={slot} value={slot}>
                 装备 · {slot}
@@ -125,11 +137,13 @@ function TransferControls({ p, c, entry, sourceSlot }: { p: Props; c: any; entry
           disabled={
             busy ||
             !target ||
+            alreadyInBackpack ||
             (!sourceSlot &&
               !targetSlot &&
               (!Number.isSafeInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > entry.quantity))
           }
           onClick={() => void send()}
+          title={alreadyInBackpack ? '物品已在此背包，可选择其他角色或装备部位' : undefined}
         >
           <ArrowRightLeft size={14} />
           {busy ? '转移中…' : '转移物品'}
@@ -144,72 +158,36 @@ function TransferControls({ p, c, entry, sourceSlot }: { p: Props; c: any; entry
   );
 }
 
-function InstanceEditor({ p, entry }: { p: Props; entry: any }) {
-  const saved = entry.data || {};
-  const [name, setName] = useState(saved.name || '');
-  const [description, setDescription] = useState(saved.description || '');
-  const [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  async function save() {
-    setBusy(true);
-    setError('');
-    try {
-      await p.mutate('inventory.instance.update', {
-        id: entry.id,
-        version: entry.version,
-        data: { ...saved, name: name.trim(), description },
-      });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="panel p-3 rounded-lg space-y-2 mt-3">
-      <div className="font-semibold text-sm">编辑这一件物品</div>
-      <p className="tiny subtle">只影响这件物品；留空名称时沿用物品库名称。</p>
-      <label>
-        <span className="label">实例名称</span>
-        <input
-          className="input"
-          disabled={busy}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={entry.item.name}
-        />
-      </label>
-      <label>
-        <span className="label">实例备注</span>
-        <textarea
-          aria-label="实例备注"
-          className="input min-h-16"
-          disabled={busy}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="磨损、附魔、剧情备注…"
-        />
-      </label>
-      <button className="btn btn-primary" disabled={busy} onClick={() => void save()}>
-        {busy ? '保存中…' : '保存实例'}
-      </button>
-      {error && (
-        <p role="alert" className="tiny text-red-300">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function Inventory({ p, id }: { p: Props; id?: string }) {
+  const drag = useInventoryDrag((state) => state.current),
+    feedback = useDropFeedback();
   const c = p.snap.characters.find((x) => x.id === id),
     open = useUI((s) => s.open),
     [itemId, setItemId] = useState(''),
     [selected, setSelected] = useState<string | null>(null),
     [error, setError] = useState(''),
     [dropping, setDropping] = useState(false),
-    [dropActive, setDropActive] = useState(false);
+    [page, setPage] = useState(0),
+    [dropActive, setDropActive] = useState(false),
+    [menu, setMenu] = useState<{ id: string; x: number; y: number; anchor: HTMLElement } | null>(null),
+    [deleting, setDeleting] = useState<{
+      id: string;
+      version: number;
+      quantity: number;
+      name: string;
+      operationId: string;
+    } | null>(null),
+    [deleteBusy, setDeleteBusy] = useState(false),
+    [offer, setOffer] = useState<{ entryId: string; request: number } | undefined>();
+  const preview = useInventoryHover(),
+    deleteLock = useRef(false),
+    deleteDialog = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  useEffect(() => {
+    if (!deleting) return;
+    deleteDialog.current?.scrollIntoView({ block: 'nearest' });
+    deleteDialog.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+  }, [deleting]);
   if (!c) return <p>角色不存在。</p>;
   if (!canViewInventory(p.snap, p.me.id, c))
     return (
@@ -231,13 +209,80 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
         backpackQuantity: e.quantity - c.equipment.filter((slot: any) => slot.entryId === e.id).length,
       }))
       .filter((e: any) => e.backpackQuantity > 0),
-    entry = backpack.find((e: any) => e.id === selected);
-  async function action(type: string, payload: Record<string, unknown>) {
+    entry = backpack.find((e: any) => e.id === selected),
+    overflow = backpack.filter((item: any) => item.position < 0 || item.position >= c.inventorySlots),
+    pageCount = Math.max(1, Math.ceil(c.inventorySlots / 96)),
+    currentPage = Math.min(page, pageCount - 1),
+    firstCell = currentPage * 96;
+  const hovered = backpack.find((item: any) => item.id === preview.preview?.entryId);
+  const menuEntry = backpack.find((item: any) => item.id === menu?.id);
+  const canTrade = (item: any) =>
+    can &&
+    canCapability(p.snap, p.me.id, 'trade') &&
+    !c.equipment.some((e: any) => e.entryId === item.id) &&
+    p.snap.characters.some(
+      (other) =>
+        other.id !== c.id && other.visibility !== 'GM' && !other.isNpc && other.ownerId && other.ownerId !== p.me.id,
+    );
+  function tradeItem(item: any) {
+    closeMenu();
+    preview.close();
+    setSelected(item.id);
+    setOffer((old) => ({ entryId: item.id, request: (old?.request || 0) + 1 }));
+  }
+  function requestDelete(item: any) {
+    closeMenu();
+    preview.close();
+    setSelected(item.id);
+    setDeleting({
+      operationId: createId(),
+      id: item.id,
+      version: item.version,
+      quantity: item.backpackQuantity,
+      name: item.data?.name || item.item.name,
+    });
+  }
+  function contextMenu(event: MouseEvent<HTMLButtonElement>, item: any) {
+    event.preventDefault();
+    preview.close();
+    if (!item || !can) return closeMenu();
+    const box = event.currentTarget.getBoundingClientRect();
+    setSelected(item.id);
+    setMenu({
+      id: item.id,
+      x: event.clientX || box.left + 12,
+      y: event.clientY || box.top + 12,
+      anchor: event.currentTarget,
+    });
+  }
+  async function confirmDelete() {
+    if (!deleting || deleteLock.current) return;
+    deleteLock.current = true;
+    setDeleteBusy(true);
+    try {
+      if (
+        await action(
+          'inventory.delete',
+          { id: deleting.id, version: deleting.version, quantity: deleting.quantity },
+          deleting.operationId,
+        )
+      ) {
+        setDeleting(null);
+        setSelected(null);
+      }
+    } finally {
+      deleteLock.current = false;
+      setDeleteBusy(false);
+    }
+  }
+  async function action(type: string, payload: Record<string, unknown>, operationId?: string) {
     try {
       setError('');
-      await p.mutate(type, payload);
+      await p.mutate(type, payload, operationId);
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     }
   }
   function dragOver(event: DragEvent) {
@@ -256,8 +301,12 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
     event.preventDefault();
     event.stopPropagation();
     setDropActive(false);
+    feedback.setHover(null);
     if ((!can && !lootable) || dropping) return;
     try {
+      setError('');
+      const hint = inventoryDropHint(p.snap, p.me.id, c, useInventoryDrag.getState().current, position);
+      if (hint && !hint.allowed) throw new Error(hint.label);
       if (event.dataTransfer.types.includes('application/x-dnd-entry')) {
         const payload = JSON.parse(event.dataTransfer.getData('application/x-dnd-entry'));
         const source = p.snap.characters.find((other) => other.id === payload.characterId);
@@ -267,7 +316,7 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
         if (source.id === c!.id && !payload.sourceSlot) {
           if (position === undefined) return;
           const targetEntry = c!.inventory.find((entry: any) => entry.position === position);
-          await action('inventory.move', {
+          await p.mutate('inventory.move', {
             id: payload.entryId,
             version: payload.version,
             position,
@@ -275,7 +324,7 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
             targetVersion: targetEntry?.version,
           });
         } else
-          await action('inventory.transfer', {
+          await p.mutate('inventory.transfer', {
             id: payload.entryId,
             version: payload.version,
             targetCharacterId: c!.id,
@@ -290,7 +339,7 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
           throw new Error('请拖入当前房间物品库中的物品');
         setDropping(true);
         const occupied = c!.inventory.some((entry: any) => entry.position === position);
-        await action('inventory.add', {
+        await p.mutate('inventory.add', {
           characterId: c!.id,
           itemId: payload.itemId,
           quantity: 1,
@@ -299,21 +348,52 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
       }
     } catch (cause) {
       setError((cause as Error).message);
+      throw cause;
     } finally {
       setDropping(false);
     }
   }
   return (
-    <div className="space-y-4 inventory-panel">
+    <div
+      className={`space-y-4 inventory-panel ${drag ? 'is-dragging' : ''} ${dropActive ? 'drop-active' : ''}`}
+      onDragOver={dragOver}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void feedback.run('backpack', () => dropItem(event)).catch(() => {});
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false);
+      }}
+      onDragStartCapture={() => {
+        preview.close();
+        closeMenu();
+      }}
+      onDragEnd={() => {
+        useInventoryDrag.getState().set(null);
+        setDropActive(false);
+      }}
+    >
       <div className="flex items-center justify-between">
         <div>
           <div className="eyebrow">INVENTORY</div>
           <h2 className="display-title text-xl mt-1">{c.name} 的背包</h2>
         </div>
-        <div className="badge">
+        <div className="badge" aria-label="背包容量">
           {backpack.length} / {c.inventorySlots} 格
         </div>
       </div>
+      <p className="tiny subtle">有力量词条时，以15点力量对应24格，每高或低1点增减2格，最低0格。</p>
+      {dropActive && drag?.sourceSlot && (
+        <p className="tiny text-amber-200" role="status">
+          松开以卸下并放入背包；也可选择一个空格。
+        </p>
+      )}
+      {overflow.length > 0 && (
+        <p className="tiny text-amber-200 border border-amber-300/30 rounded-lg p-3" role="status">
+          容量已缩减，{overflow.length} 件物品位于容量之外，已保留在下方。可整理到空格、穿戴或转移给其他角色。
+        </p>
+      )}
       <div className="flex gap-2">
         <button className="btn shrink-0 whitespace-nowrap" onClick={() => open('equipment', c.id)}>
           <Shirt size={15} /> 查看装备
@@ -353,32 +433,65 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
         aria-busy={dropping}
         onDragOver={dragOver}
         onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false);
+          if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+            setDropActive(false);
+            feedback.setHover(null);
+          }
         }}
-        onDrop={(event) => void dropItem(event)}
+        onDrop={(event) => void dropItem(event).catch(() => {})}
       >
-        {Array.from({ length: c.inventorySlots }, (_, pos) => {
+        {Array.from({ length: Math.min(96, c.inventorySlots - firstCell) }, (_, index) => {
+          const pos = firstCell + index;
           const item = backpack.find((e: any) => e.position === pos);
+          const hint = inventoryDropHint(p.snap, p.me.id, c, drag, pos),
+            target = String(pos);
           return (
             <button
               key={pos}
               aria-label={`背包格 ${pos + 1}：${item ? item.data?.name || item.item.name : '空'}`}
-              className={`inventory-slot ${item ? 'filled' : ''} ${selected === item?.id ? 'selected' : ''}`}
-              onDragOver={dragOver}
+              className={`inventory-slot ${item ? 'filled' : ''} ${selected === item?.id ? 'selected' : ''} ${drag && feedback.hover === target && hint ? (hint.allowed ? 'is-drop-target' : 'is-drop-blocked') : ''} ${feedback.pending === target ? 'is-drop-pending' : ''} ${feedback.landed === target ? 'is-drop-landed' : ''}`}
+              onDragOver={(event) => {
+                dragOver(event);
+                feedback.setHover(target);
+                if (hint && !hint.allowed) event.dataTransfer.dropEffect = 'none';
+              }}
               onDrop={(event) => {
-                void dropItem(event, pos);
+                event.preventDefault();
+                event.stopPropagation();
+                void feedback
+                  .run(target, async () => {
+                    await dropItem(event, pos);
+                  })
+                  .catch(() => {});
               }}
               draggable={(can || lootable) && !dropping && Boolean(item)}
               onDragStart={(event) => {
                 if (item) dragEntry(event, p, c, item);
               }}
-              onClick={() => setSelected(item?.id || null)}
+              onPointerEnter={(event) => {
+                if (item && !drag) preview.show(item.id, event.currentTarget);
+              }}
+              onPointerLeave={preview.leave}
+              onFocus={(event) => {
+                if (item && !drag) preview.show(item.id, event.currentTarget);
+              }}
+              onBlur={preview.leave}
+              onContextMenu={(event) => contextMenu(event, item)}
+              onClick={() => {
+                closeMenu();
+                setSelected(item?.id || null);
+              }}
             >
               <span className="inventory-pos">{pos + 1}</span>
+              {drag && feedback.hover === target && hint && <span className="drop-hint">{hint.label}</span>}
               {item ? (
                 <>
                   <div className="inventory-icon">
-                    {item.item.imageUrl ? <img src={item.item.imageUrl} alt="" /> : <Backpack size={25} />}
+                    {item.item.imageUrl ? (
+                      <img src={item.item.imageUrl} alt="" draggable={false} />
+                    ) : (
+                      <Backpack size={25} />
+                    )}
                   </div>
                   <strong className="truncate w-full">{item.data?.name || item.item.name}</strong>
                   <span className="tiny subtle">×{item.backpackQuantity}</span>
@@ -390,84 +503,132 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
           );
         })}
       </div>
+      {pageCount > 1 && (
+        <div className="flex flex-wrap items-center gap-2 tiny" aria-label="背包翻页">
+          <button className="btn" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+            上一页
+          </button>
+          <span>
+            第 {currentPage + 1} / {pageCount} 页
+          </span>
+          <button className="btn" disabled={currentPage === pageCount - 1} onClick={() => setPage(currentPage + 1)}>
+            下一页
+          </button>
+        </div>
+      )}
+      {overflow.length > 0 && (
+        <section aria-label="超出容量的物品" className="space-y-2">
+          <h3 className="tiny text-amber-200">待整理物品 · {overflow.length} 件</h3>
+          <div className="inventory-grid">
+            {overflow.map((item: any) => (
+              <button
+                key={item.id}
+                className={`inventory-slot filled ${selected === item.id ? 'selected' : ''}`}
+                aria-label={`超出容量物品：${item.data?.name || item.item.name}`}
+                draggable={(can || lootable) && !dropping}
+                onDragStart={(event) => dragEntry(event, p, c, item)}
+                onPointerEnter={(event) => {
+                  if (!drag) preview.show(item.id, event.currentTarget);
+                }}
+                onPointerLeave={preview.leave}
+                onFocus={(event) => {
+                  if (!drag) preview.show(item.id, event.currentTarget);
+                }}
+                onBlur={preview.leave}
+                onContextMenu={(event) => contextMenu(event, item)}
+                onClick={() => {
+                  closeMenu();
+                  setSelected(item.id);
+                }}
+              >
+                <span className="tiny text-amber-200">待整理</span>
+                <div className="inventory-icon">
+                  {item.item.imageUrl ? (
+                    <img src={item.item.imageUrl} alt="" draggable={false} />
+                  ) : (
+                    <Backpack size={25} />
+                  )}
+                </div>
+                <strong className="truncate w-full">{item.data?.name || item.item.name}</strong>
+                <span className="tiny subtle">×{item.backpackQuantity}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       {entry && (
         <div className="inventory-detail">
-          <div className="flex gap-3 items-start">
-            <div className="inventory-detail-icon">
-              {entry.item.imageUrl ? <img src={entry.item.imageUrl} alt="" /> : <Backpack size={26} />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold">
-                {entry.data?.name || entry.item.name} <span className="badge">{entry.item.kind}</span>
-              </div>
-              <p className="tiny subtle mt-1">{entry.data?.description || entry.item.description || '暂无说明'}</p>
-            </div>
-            <button className="tiny text-amber-300" onClick={() => open('item', entry.item.id)}>
-              查看物品卡
-            </button>
-          </div>
-          <dl className="item-detail-fields">
-            {itemFields(entry.item.data).map((field, index) => (
-              <div key={index}>
-                <dt>{field.name}</dt>
-                <dd>{field.value}</dd>
-              </div>
-            ))}
-          </dl>
-          {entry.item.data?.notes && <p className="tiny whitespace-pre-wrap mt-2">备注：{entry.item.data.notes}</p>}
+          <InventoryItemDetails entry={entry} />
           {can && (
-            <>
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                <button
-                  className="btn"
-                  onClick={() =>
-                    void action('inventory.update', {
-                      id: entry.id,
-                      version: entry.version,
-                      quantity: entry.quantity - 1,
-                    })
-                  }
-                >
-                  <Minus size={14} />
-                </button>
-                <span className="tiny">背包数量 {entry.backpackQuantity}</span>
-                <button
-                  className="btn"
-                  disabled={!canIncrease}
-                  title={canIncrease ? '增加数量' : '增加数量需要 GM 授权'}
-                  onClick={() =>
-                    void action('inventory.update', {
-                      id: entry.id,
-                      version: entry.version,
-                      quantity: entry.quantity + 1,
-                    })
-                  }
-                >
-                  <Plus size={14} />
-                </button>
-                {isWearable(entry.item.kind) && (
-                  <button className="btn shrink-0 whitespace-nowrap" onClick={() => open('equipment', c.id)}>
-                    <GripVertical size={14} /> 拖到装备栏
-                  </button>
-                )}
-              </div>
-              <InstanceEditor key={`${entry.id}:${entry.version}`} p={p} entry={entry} />
-            </>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                className="btn"
+                disabled={!canTrade(entry)}
+                onClick={() => tradeItem(entry)}
+                title={
+                  c.equipment.some((e: any) => e.entryId === entry.id) ? '请先卸下该物品的装备副本再交易' : undefined
+                }
+              >
+                <ArrowRightLeft size={14} />
+                交易物品
+              </button>
+              <button className="btn" disabled={deleteBusy} onClick={() => requestDelete(entry)}>
+                <Trash2 size={14} />
+                删除物品
+              </button>
+            </div>
           )}
           {(can || lootable) && (
             <TransferControls key={entry.id} p={p} c={c} entry={{ ...entry, quantity: entry.backpackQuantity }} />
           )}
         </div>
       )}
+      {deleting && (
+        <div ref={deleteDialog} role="dialog" aria-label="删除背包物品" className="inventory-delete-confirm space-y-3">
+          <p>
+            删除背包中的「{deleting.name}」×{deleting.quantity}？已穿戴的副本会保留。
+          </p>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" disabled={deleteBusy || !can} onClick={() => void confirmDelete()}>
+              {deleteBusy ? '删除中…' : '确认删除'}
+            </button>
+            <button className="btn" disabled={deleteBusy} onClick={() => setDeleting(null)}>
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+      {hovered && preview.preview && !drag && !menuEntry && (
+        <InventoryItemTooltip
+          entry={hovered}
+          anchor={preview.preview.anchor}
+          keep={preview.keep}
+          leave={preview.leave}
+          close={preview.close}
+        />
+      )}
+      {menu && menuEntry && (
+        <InventoryItemMenu
+          x={menu.x}
+          y={menu.y}
+          anchor={menu.anchor}
+          canTrade={Boolean(canTrade(menuEntry))}
+          canDelete={can && !deleteBusy}
+          close={closeMenu}
+          trade={() => tradeItem(menuEntry)}
+          remove={() => requestDelete(menuEntry)}
+        />
+      )}
       {error && (
         <p role="alert" className="text-red-300 tiny">
           {error}
         </p>
       )}
+      <TradePanel p={p} characterId={c.id} offer={offer} />
       {(can || lootable) && (
         <p className="tiny subtle">
           同一背包内拖动可整理或交换格子；跨角色每次拖动 1
-          件，数量可用转移按钮指定。装备可拖入另一背包或装备部位，自动卸下。
+          件，数量可用转移按钮指定。装备可拖回当前背包或其他获准的背包，自动卸下。悬停查看详情，右键可交易或删除物品。
         </p>
       )}
     </div>
@@ -475,6 +636,8 @@ export function Inventory({ p, id }: { p: Props; id?: string }) {
 }
 
 export function Equipment({ p, id }: { p: Props; id?: string }) {
+  const drag = useInventoryDrag((state) => state.current),
+    feedback = useDropFeedback();
   const c = p.snap.characters.find((x) => x.id === id),
     open = useUI((s) => s.open),
     [error, setError] = useState('');
@@ -492,12 +655,12 @@ export function Equipment({ p, id }: { p: Props; id?: string }) {
   const lootable = !p.isGM && c.inventoryLootable === true;
   const can = canEditCharacter(p.snap, p.me.id, c) && !lootable,
     canArrange = can || lootable,
-    slotNames = p.snap.room.equipmentSlots?.length ? p.snap.room.equipmentSlots : slots;
+    slotNames = withBackpackSlot(p.snap.room.equipmentSlots?.length ? p.snap.room.equipmentSlots : slots);
   async function equip(slot: string, entryId: string | null) {
     try {
       setError('');
       if (lootable) {
-        const old = c!.equipment.find((e: any) => e.slot === slot),
+        const old = equipmentAtSlot(c!.equipment, c!.inventory, slot),
           entry = c!.inventory.find((e: any) => e.id === (entryId || old?.entryId));
         if (!entry) return;
         await p.mutate(
@@ -523,14 +686,18 @@ export function Equipment({ p, id }: { p: Props; id?: string }) {
         quantity: 1,
         sourceSlot: payload.sourceSlot,
         targetSlot: slot,
-        targetEquipmentId: c!.equipment.find((e: any) => e.slot === slot)?.id || null,
+        targetEquipmentId: equipmentAtSlot(c!.equipment, c!.inventory, slot)?.id || null,
       });
     } catch (e) {
       setError((e as Error).message);
+      throw e;
     }
   }
   return (
-    <div className="space-y-4 equipment-panel">
+    <div
+      className={`space-y-4 equipment-panel ${drag ? 'is-dragging' : ''}`}
+      onDragEnd={() => useInventoryDrag.getState().set(null)}
+    >
       <div className="flex items-center justify-between">
         <div>
           <div className="eyebrow">EQUIPMENT</div>
@@ -545,75 +712,25 @@ export function Equipment({ p, id }: { p: Props; id?: string }) {
         <Backpack size={15} /> 打开背包
       </button>
       <div className="equip-grid">
-        {slotNames.map((slot: string) => {
-          const equipped = c.equipment.find((e: any) => e.slot === slot),
-            entry = c.inventory.find((e: any) => e.id === equipped?.entryId),
-            compatible = c.inventory.filter(
-              (e: any) =>
-                isWearable(e.item.kind) &&
-                equipmentFitsSlot(e.item.compatibleSlots, slot) &&
-                (e.id === equipped?.entryId ||
-                  e.quantity > c.equipment.filter((worn: any) => worn.entryId === e.id).length),
-            );
-          return (
-            <div
-              key={slot}
-              className={`equip-slot ${entry ? 'occupied' : ''}`}
-              aria-label={`装备部位 ${slot}`}
-              onDragOver={(event) => {
-                if (canArrange && event.dataTransfer.types.includes('application/x-dnd-entry')) {
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = 'move';
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                if (!canArrange) return;
-                void dropEquip(event, slot);
-              }}
-            >
-              <div className="eyebrow">{slot}</div>
-              {entry ? (
-                <div
-                  className="flex items-center gap-2 mt-2"
-                  aria-label={`装备物品 ${slot}：${entry.data?.name || entry.item.name}`}
-                  draggable={canArrange}
-                  onDragStart={(event) => dragEntry(event, p, c, entry, slot)}
-                >
-                  <div className="equip-icon">
-                    {entry.item.imageUrl ? <img src={entry.item.imageUrl} alt="" /> : <Shirt size={18} />}
-                  </div>
-                  <div className="equip-item-name min-w-0 flex-1">{entry.data?.name || entry.item.name}</div>
+        {slotNames
+          .filter((slot: string) => slot !== '背包' || !slotNames.includes('胸部'))
+          .map((slot: string) =>
+            slot === '胸部' ? (
+              <section className="equip-chest-group" key="chest">
+                <header>
+                  <Shirt size={16} />
+                  <strong>胸部</strong>
+                  <span>护甲与背包可同时装备</span>
+                </header>
+                <div className="equip-chest-pair">
+                  {renderSlot('胸部')}
+                  {renderSlot('背包')}
                 </div>
-              ) : (
-                <div className="equip-empty">{can ? '拖入装备' : '未装备'}</div>
-              )}
-              {canArrange && (
-                <div className="flex gap-1 mt-2">
-                  <select
-                    aria-label={`${slot}装备`}
-                    className="input equip-select"
-                    value={equipped?.entryId || ''}
-                    onChange={(event) => void equip(slot, event.target.value || null)}
-                  >
-                    <option value="">空</option>
-                    {compatible.map((e: any) => (
-                      <option key={e.id} value={e.id}>
-                        {e.item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {entry && canArrange && (
-                <TransferControls key={`${slot}:${entry.id}`} p={p} c={c} entry={entry} sourceSlot={slot} />
-              )}{' '}
-              {entry && !p.snap.room.sheetMode && (
-                <div className="tiny text-amber-300 mt-1">防御 +{entry.data?.防御 ?? entry.item.data?.防御 ?? 0}</div>
-              )}
-            </div>
-          );
-        })}
+              </section>
+            ) : (
+              renderSlot(slot)
+            ),
+          )}
       </div>
       {error && (
         <p role="alert" className="text-red-300 tiny">
@@ -621,10 +738,109 @@ export function Equipment({ p, id }: { p: Props; id?: string }) {
         </p>
       )}
       <p className="tiny subtle">
-        装备或饰品的数值项目与人物卡字段名称一致时，穿戴后自动加成，脱下后恢复。数量不会自动放大加成，每个穿戴部位按一件计算。
+        装备数值词条与人物卡同名字段联动；双手武器按一件计算。背包装备在胸部第二位置，“格数”增加容量，卸下后撤销。
       </p>
     </div>
   );
+  function renderSlot(slot: string) {
+    const hint = inventoryDropHint(p.snap, p.me.id, c, drag, undefined, slot);
+    const equipped = equipmentAtSlot(c.equipment, c.inventory, slot),
+      entry = c.inventory.find((e: any) => e.id === equipped?.entryId),
+      compatible = c.inventory.filter(
+        (e: any) =>
+          isWearable(e.item.kind) &&
+          equipmentFitsSlot(e.item.compatibleSlots, slot, e.item.kind) &&
+          (e.id === equipped?.entryId || e.quantity > c.equipment.filter((worn: any) => worn.entryId === e.id).length),
+      );
+    return (
+      <div
+        key={slot}
+        className={`equip-slot ${slot === '背包' ? 'equip-backpack-slot' : ''} ${entry ? 'occupied' : ''} ${drag && feedback.hover === slot && hint ? (hint.allowed ? 'is-drop-target' : 'is-drop-blocked') : ''} ${feedback.pending === slot ? 'is-drop-pending' : ''} ${feedback.landed === slot ? 'is-drop-landed' : ''}`}
+        aria-label={`装备部位 ${slot}`}
+        onDragOver={(event) => {
+          if (canArrange && event.dataTransfer.types.includes('application/x-dnd-entry')) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            feedback.setHover(slot);
+            if (hint && !hint.allowed) event.dataTransfer.dropEffect = 'none';
+          }
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node)) feedback.setHover(null);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!canArrange) return;
+          if (hint && !hint.allowed) {
+            setError(hint.label);
+            feedback.setHover(null);
+            return;
+          }
+          void feedback.run(slot, () => dropEquip(event, slot)).catch(() => {});
+        }}
+      >
+        <div className="eyebrow">
+          {slot === '胸部' ? '护甲' : slot === '背包' ? '背包 · 扩容' : slot}
+          {slot === '背包' && entry && (
+            <span className="ml-2">
+              +{entry.item.data?.customFields?.find((field: any) => field.name === '格数')?.value ?? 0} 格
+            </span>
+          )}
+        </div>
+        {drag && feedback.hover === slot && hint && <span className="drop-hint">{hint.label}</span>}
+        {entry ? (
+          <div
+            className="flex items-center gap-2 mt-2"
+            aria-label={`装备物品 ${slot}：${entry.data?.name || entry.item.name}`}
+            draggable={canArrange}
+            onDragStart={(event) => dragEntry(event, p, c, entry, slot)}
+          >
+            <div className="equip-icon">
+              {entry.item.imageUrl ? (
+                <img src={entry.item.imageUrl} alt="" draggable={false} />
+              ) : slot === '背包' ? (
+                <Backpack size={18} />
+              ) : (
+                <Shirt size={18} />
+              )}
+            </div>
+            <div className="equip-item-name min-w-0 flex-1">{entry.data?.name || entry.item.name}</div>
+          </div>
+        ) : (
+          <div className="equip-empty">{can ? '拖入装备' : '未装备'}</div>
+        )}
+        {canArrange && (
+          <div className="flex gap-1 mt-2">
+            <select
+              aria-label={`${slot}装备`}
+              className="input equip-select"
+              value={equipped?.entryId || ''}
+              onChange={(event) => void equip(slot, event.target.value || null)}
+            >
+              <option value="">空</option>
+              {compatible.map((e: any) => (
+                <option key={e.id} value={e.id}>
+                  {e.item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {entry && canArrange && (
+          <TransferControls key={`${slot}:${entry.id}`} p={p} c={c} entry={entry} sourceSlot={slot} />
+        )}{' '}
+        {slot === '背包' && entry && (
+          <div className="tiny text-amber-300 mt-1">
+            容量 +{entry.item.data?.customFields?.find((field: any) => field.name === '格数')?.value ?? 0} 格
+          </div>
+        )}
+        {entry && !p.snap.room.sheetMode && (
+          <div className="tiny text-amber-300 mt-1">防御 +{entry.data?.防御 ?? entry.item.data?.防御 ?? 0}</div>
+        )}
+      </div>
+    );
+  }
 }
 
 export function PlayerBackpacks({ p }: { p: Props }) {
@@ -639,7 +855,12 @@ export function PlayerBackpacks({ p }: { p: Props }) {
       {characters.length > 1 && (
         <label>
           <span className="label">选择角色背包</span>
-          <select className="input" value={current.id} onChange={(event) => setChosen(event.target.value)}>
+          <select
+            aria-label="选择角色背包"
+            className="input"
+            value={current.id}
+            onChange={(event) => setChosen(event.target.value)}
+          >
             {characters.map((character) => (
               <option key={character.id} value={character.id}>
                 {character.name}

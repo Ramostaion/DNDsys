@@ -5,7 +5,6 @@ import ResizeHandles from '../ResizeHandles';
 
 type View = {
   hidden: boolean;
-  minimized: boolean;
   x: number;
   y: number;
   w: number;
@@ -17,7 +16,6 @@ type View = {
 };
 const initial = (): View => ({
   hidden: false,
-  minimized: false,
   x: Math.max(85, Math.round((innerWidth - 760) / 2)),
   y: Math.max(70, Math.round((innerHeight - 560) / 2)),
   w: Math.min(760, innerWidth - 110),
@@ -46,14 +44,17 @@ export default function PresentationViewer({
 }) {
   const key = `dnd-presentation-view:${roomId}:${userId}`;
   const [view, setView] = useState<View>(() => {
-    let saved: View;
+    let saved: View & { minimized?: boolean };
     try {
       saved = { ...initial(), ...JSON.parse(localStorage.getItem(key) || '{}') };
     } catch {
       saved = initial();
     }
+    const hidden = saved.hidden || saved.minimized === true;
+    delete saved.minimized;
     return {
       ...saved,
+      hidden,
       x: clamp(saved.x, 0, Math.max(0, innerWidth - saved.w - 88)),
       y: clamp(saved.y, 0, Math.max(0, innerHeight - saved.h - 8)),
     };
@@ -127,7 +128,7 @@ export default function PresentationViewer({
     };
     element.addEventListener('wheel', wheel, { passive: false });
     return () => element.removeEventListener('wheel', wheel);
-  }, [active, view.hidden, view.minimized]);
+  }, [active, view.hidden]);
   const imageKey = `${asset?.id || 'none'}:${current?.revision || 0}:${retry}`;
   const update = (patch: Partial<View>) => setView((old) => ({ ...old, ...patch }));
   const maximize = () => update({ x: 10, y: 10, w: innerWidth - 100, h: innerHeight - 25 });
@@ -142,14 +143,14 @@ export default function PresentationViewer({
         <button
           className="presentation-entry"
           onClick={() => {
-            update({ hidden: false, minimized: false });
+            update({ hidden: false });
             onRetry();
           }}
         >
           {active ? `✦ 剧情展示中${asset ? ` · ${asset.title}` : ''}` : '剧情连接中 · 点击重试'}
         </button>
       )}
-      {active && !view.hidden && !view.minimized && (
+      {active && !view.hidden && (
         <div
           className={`presentation-viewer surface ${view.mode === 'cinematic' ? 'cinematic' : ''} ${view.reducedMotion ? 'reduced-motion' : ''} transition-${current?.transition || 'none'}`}
           style={{
@@ -193,9 +194,6 @@ export default function PresentationViewer({
             </button>
             <button title="应用内最大化" onClick={maximize}>
               □
-            </button>
-            <button title="最小化" onClick={() => update({ minimized: true })}>
-              −
             </button>
             <button title="仅关闭我的窗口" aria-label="仅关闭我的窗口" onClick={() => update({ hidden: true })}>
               ×

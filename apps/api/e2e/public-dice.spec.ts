@@ -125,7 +125,7 @@ test('公开骰全员顶部同步、房间冷却竞态、私密隔离、去重�
     await gm.locator('.game-rail').getByRole('button', { name: '角色', exact: true }).click();
     await gm.getByRole('button', { name: '演出中的人物卡', exact: true }).click();
     await gm.getByRole('button', { name: '关闭角色', exact: true }).click();
-    await gm.getByLabel('角色名称').fill('尚未保存的角色名称');
+    await gm.getByLabel('角色名称', { exact: true }).fill('尚未保存的角色名称');
     // Test every member's public button without requiring the dice window for the animation.
     for (const page of [a, b])
       await page.locator('.game-rail').getByRole('button', { name: '骰子', exact: true }).click();
@@ -161,9 +161,9 @@ test('公开骰全员顶部同步、房间冷却竞态、私密隔离、去重�
     await expect(b.getByRole('button', { name: '掷出骰子', exact: true })).toBeDisabled();
     await b.getByLabel('掷骰表达式').fill('3d8+2');
     await expect(b.getByLabel('掷骰表达式')).toHaveValue('3d8+2');
-    await expect(gm.getByLabel('角色名称')).toHaveValue('尚未保存的角色名称');
-    await gm.getByLabel('角色名称').fill('演出时仍可编辑');
-    await expect(gm.getByLabel('角色名称')).toHaveValue('演出时仍可编辑');
+    await expect(gm.getByLabel('角色名称', { exact: true })).toHaveValue('尚未保存的角色名称');
+    await gm.getByLabel('角色名称', { exact: true }).fill('演出时仍可编辑');
+    await expect(gm.getByLabel('角色名称', { exact: true })).toHaveValue('演出时仍可编辑');
     await expect.poll(() => a.locator('.public-dice-banner').getAttribute('data-phase')).toBe('result');
     expect(
       await a
@@ -201,7 +201,7 @@ test('公开骰全员顶部同步、房间冷却竞态、私密隔离、去重�
       expect(phases).toContainEqual({
         id: first.id,
         phase: 'fading',
-        animation: page === b ? 'none' : 'public-dice-exit',
+        animation: page === b ? 'none' : 'broadcast-depart',
       });
     }
     // Private GM result has no public event/deadline and does not consume the other room's allowance.
@@ -237,7 +237,7 @@ test('公开骰全员顶部同步、房间冷却竞态、私密隔离、去重�
         .first()
         .evaluate((element) => getComputedStyle(element).animationName),
     ).toBe('none');
-    await expect(gm.getByLabel('角色名称')).toHaveValue('演出时仍可编辑');
+    await expect(gm.getByLabel('角色名称', { exact: true })).toHaveValue('演出时仍可编辑');
     // Refresh during cooldown recovers its deadline without replaying this old animation.
     await a.reload();
     await a.locator('.game-rail').getByRole('button', { name: '骰子', exact: true }).click();
@@ -298,7 +298,7 @@ test('公开骰全员顶部同步、房间冷却竞态、私密隔离、去重�
     expect(playerSnapshot.rolls.some((roll: any) => roll.id === privateRoll.id)).toBe(false);
     expect(playerSnapshot.rolls).toHaveLength(4);
     expect(playerSnapshot.diceState.cooldownUntil).toBe(gmRoll.cooldownUntil);
-    await expect(gm.getByLabel('角色名称')).toHaveValue('演出时仍可编辑');
+    await expect(gm.getByLabel('角色名称', { exact: true })).toHaveValue('演出时仍可编辑');
     // Lose the reply after a real server commit, then retry the UI's original request ID.
     await expect(a.getByRole('button', { name: '掷出骰子', exact: true })).toBeEnabled();
     await a.getByLabel('掷骰表达式').fill('1d100');

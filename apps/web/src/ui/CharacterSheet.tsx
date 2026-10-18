@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ABILITIES, DEFAULT_RULES, xpRequired } from '@dnd/shared';
+import { ABILITIES, DEFAULT_RULES, xpRequired, roomMemberName } from '@dnd/shared';
 import { Dices, Heart, Shield, Backpack, Shirt, Plus, BookOpen } from 'lucide-react';
 import type { Snapshot } from '../api';
 import { useUI } from '../store';
+import ResourceMeter from './ResourceMeter';
 import { CharacterTagManageButton } from './character-tags/CharacterTagBadges';
 import CharacterAvatar from './CharacterAvatar';
 import NpcSearchControl from './NpcSearchControl';
@@ -104,11 +105,11 @@ export default function CharacterSheet({ p, id }: { p: Props; id?: string }) {
     }
   }
   return (
-    <div className="character-sheet space-y-5">
+    <div className="character-sheet sheet-legacy space-y-5">
       <div className="sheet-hero">
         <CharacterAvatar p={p} character={c} />
-        <div className="flex-1 min-w-0">
-          <div className="eyebrow">LEVEL {c.level} · CHARACTER SHEET</div>
+        <div className="flex-1 min-w-0 sheet-identity">
+          <div className="eyebrow">LEVEL {c.level} · ADVENTURER DOSSIER</div>
           <input
             className="sheet-name"
             aria-label="角色名称"
@@ -119,22 +120,24 @@ export default function CharacterSheet({ p, id }: { p: Props; id?: string }) {
             onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
           />
           <div className="tiny subtle">
-            {p.snap.members.find((m) => m.userId === c.ownerId)?.user?.username || '未分配玩家'} 的角色
+            {roomMemberName(
+              p.snap.members.find((m) => m.userId === c.ownerId),
+              '未分配玩家',
+            )}{' '}
+            的角色
           </div>
         </div>
       </div>
       <ShieldSection p={p} c={c} />
       <div className="sheet-vitals">
-        <div className="sheet-vital">
+        <div className="sheet-vital is-health">
           <div className="sheet-vital-label">
             <Heart size={16} /> 生命
           </div>
           <div className="sheet-vital-value">
             {c.currentHp} {p.isGM && <small>/ {maxHp}</small>}
           </div>
-          <div className="sheet-progress">
-            <div style={{ width: `${Math.min(100, (c.currentHp / maxHp) * 100)}%` }} />
-          </div>
+          <ResourceMeter value={c.currentHp} maximum={maxHp} identity={`${c.id}:health`} showMaximum={p.isGM} />
           {p.isGM && (
             <div className="flex items-center gap-1 mt-2">
               <input
@@ -154,7 +157,7 @@ export default function CharacterSheet({ p, id }: { p: Props; id?: string }) {
             </div>
           )}
         </div>
-        <div className="sheet-vital">
+        <div className="sheet-vital is-defense">
           <div className="sheet-vital-label">
             <Shield size={16} /> 防御
           </div>
@@ -163,7 +166,7 @@ export default function CharacterSheet({ p, id }: { p: Props; id?: string }) {
             {(c.derived?.sources?.防御 || []).join(' · ') || '基础防御'}
           </div>
         </div>
-        <div className="sheet-vital">
+        <div className="sheet-vital is-experience">
           <div className="sheet-vital-label">
             <BookOpen size={16} /> 经验
           </div>

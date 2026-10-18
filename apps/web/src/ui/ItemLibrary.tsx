@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Package, Plus, Trash2 } from 'lucide-react';
+import { isWearable, normalizeEquipmentSlots } from '@dnd/shared';
 import { useUI } from '../store';
 import type { Snapshot } from '../api';
 import { canCapability } from '../permissions';
 import { itemFields, validateItemFields, type ItemField } from './item-fields';
+import { useInventoryDrag } from './inventory-drag-feedback';
 
 type Props = {
   snap: Snapshot;
@@ -11,7 +13,7 @@ type Props = {
   isGM: boolean;
   mutate: (type: string, payload: Record<string, unknown>) => Promise<any>;
 };
-const defaultKinds = ['杂物', '装备', '饰品', '道具', '任务物品'];
+const defaultKinds = ['杂物', '装备', '双手武器', '背包', '饰品', '道具', '任务物品'];
 function canEdit(p: Props) {
   return p.isGM && canCapability(p.snap, p.me.id, 'publicItems');
 }
@@ -92,12 +94,14 @@ export function ItemLibrary({ p }: { p: Props }) {
             className="inventory-slot filled item-library-slot"
             draggable={canCapability(p.snap, p.me.id, 'inventoryAdd')}
             onDragStart={(event) => {
+              useInventoryDrag.getState().set({ roomId: p.snap.room.id, itemId: item.id });
               event.dataTransfer.effectAllowed = 'copy';
               event.dataTransfer.setData(
                 'application/x-dnd-item',
                 JSON.stringify({ roomId: p.snap.room.id, itemId: item.id }),
               );
             }}
+            onDragEnd={() => useInventoryDrag.getState().set(null)}
             onClick={() => open('item', item.id)}
           >
             <div className="inventory-icon">
@@ -131,7 +135,7 @@ function LoadedItemEditor({ p, item, windowId }: { p: Props; item: any; windowId
     [imageUrl, setImageUrl] = useState(item.imageUrl || ''),
     [fields, setFields] = useState<ItemField[]>(itemFields(item.data)),
     [notes, setNotes] = useState(String(item.data?.notes || '')),
-    [slots, setSlots] = useState((item.compatibleSlots || []).join(', ')),
+    [slots, setSlots] = useState(normalizeEquipmentSlots(item.compatibleSlots).join(', ')),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     editor = canEdit(p);
@@ -144,7 +148,7 @@ function LoadedItemEditor({ p, item, windowId }: { p: Props; item: any; windowId
     setImageUrl(item.imageUrl || '');
     setFields(itemFields(item.data));
     setNotes(String(item.data?.notes || ''));
-    setSlots((item.compatibleSlots || []).join(', '));
+    setSlots(normalizeEquipmentSlots(item.compatibleSlots).join(', '));
     setError('');
   }
   function updateField(index: number, patch: Partial<ItemField>) {
@@ -170,10 +174,7 @@ function LoadedItemEditor({ p, item, windowId }: { p: Props; item: any; windowId
           description,
           imageUrl: imageUrl || null,
           data: { ...(item.data || {}), customFields, notes },
-          compatibleSlots: slots
-            .split(',')
-            .map((x: string) => x.trim())
-            .filter(Boolean),
+          compatibleSlots: normalizeEquipmentSlots(slots),
         },
       });
       setVersion(saved.version);
@@ -261,7 +262,11 @@ function LoadedItemEditor({ p, item, windowId }: { p: Props; item: any; windowId
             disabled={!editor || busy}
             list="item-kinds"
             value={kind}
-            onChange={(e) => setKind(e.target.value)}
+            onChange={(e) => {
+              setKind(e.target.value);
+              if (e.target.value === '背包' && !fields.some((field) => field.name.trim() === '格数'))
+                setFields([...fields, { name: '格数', value: 0 }]);
+            }}
           />
           <datalist id="item-kinds">
             {defaultKinds.map((value) => (
@@ -286,7 +291,7 @@ function LoadedItemEditor({ p, item, windowId }: { p: Props; item: any; windowId
         <h3 className="font-semibold text-sm">自定义项目</h3>
         <p className="tiny subtle">
           自由填写资料。装备与饰品中，项目类型选“数值”、名称与人物卡属性名称一致时，穿戴后自动加成（例如法伤
-          +5）。文字项目与杂物仅作记录。
+          +5）。文字项目与杂物仅作记录。背包的“格数”填写非负整数，装备到胸部背包位后增加容量。
         </p>
         {fields.map((field, index) => (
           <div className="item-field-row" key={index}>
@@ -359,17 +364,22 @@ function LoadedItemEditor({ p, item, windowId }: { p: Props; item: any; windowId
           placeholder="使用限制、特殊效果或剧情备注…"
         />
       </label>
-      {(kind === '装备' || kind === '饰品') && (
+      {isWearable(kind) && (
         <label className="block">
           <span className="label">可装备部位（逗号分隔）</span>
           <input
+            aria-label="可装备部位"
             className="input"
             disabled={!editor || busy}
             value={slots}
             onChange={(e) => setSlots(e.target.value)}
             placeholder={(p.snap.room.equipmentSlots || []).join(', ')}
           />
-          <span className="tiny subtle">留空表示可以放入任意装备部位。</span>
+          <span className="tiny subtle">
+            {kind === '双手武器'
+              ? '双手武器占用主手和副手，任一手卸下后整件回到背包。'
+              : '支持中文或英文逗号；留空表示任意装备部位。'}
+          </span>
         </label>
       )}
       {error && (

@@ -22,10 +22,12 @@ export const titles: Record<WindowType, string> = {
   combat: '战斗',
   dice: '骰子',
   presentation: '剧情导演台',
-  'character-tags': '角色标签',
-  'tag-detail': '标签详情',
-  'tag-library': '标签库',
-  'tag-overview': '角色标签总览',
+  'character-tags': '角色状态',
+  'tag-detail': '状态详情',
+  'tag-library': '状态库',
+  'tag-overview': '角色状态总览',
+  'initiative-settings': '先手权重配置',
+  'turn-system': '回合系统',
 };
 
 export const windowTitle = (type: WindowType, isGM: boolean) => (type === 'templates' && !isGM ? '能力' : titles[type]);

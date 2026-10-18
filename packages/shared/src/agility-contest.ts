@@ -1,6 +1,7 @@
 import type { SheetField, ValueBreakdown } from './sheet.js';
 
 export type AgilitySnapshot = {
+  attributeName?: string;
   fieldId: string;
   base: number;
   modifiers: ValueBreakdown['changes'];
@@ -37,9 +38,10 @@ export type CombatBroadcast = {
   serverNow: number;
   message: string;
   hit: boolean;
-  attacker: { name: string; d20: number; effective: number; bonus?: number; total: number };
-  defender: { name: string; d20: number; effective: number; bonus?: number; total: number };
+  attacker: { name: string; d20: number; effective: number; bonus?: number; total: number; attributeName?: string };
+  defender: { name: string; d20: number; effective: number; bonus?: number; total: number; attributeName?: string };
 };
+export const contestAttributes = ['敏捷', '力量', '体质', '智力', '感知', '魅力'] as const;
 
 export function agilityBonus(value: number) {
   if (!Number.isFinite(value) || value < 0) throw new Error('敏捷数值无效');
@@ -60,7 +62,7 @@ export function agilityContestBase(side: { effective: number; bonus?: number }, 
   return version === 2 || version === 4 ? (side.bonus ?? 0) : side.effective;
 }
 
-export function characterAgility(
+export function characterAttribute(
   character: {
     attributes?: unknown;
     fieldValues?: unknown;
@@ -72,13 +74,14 @@ export function characterAgility(
   },
   fields: SheetField[],
   sheetMode: boolean,
+  attributeName = '敏捷',
 ): { agility?: AgilitySnapshot; reason?: string } {
-  const matches = fields.filter((field) => field.name.trim() === '敏捷');
+  const matches = fields.filter((field) => field.name.trim() === attributeName);
   if (sheetMode && matches.length !== 1)
-    return { reason: matches.length ? '存在多个敏捷词条，无法唯一关联' : '缺少敏捷词条' };
+    return { reason: matches.length ? `存在多个${attributeName}词条，无法唯一关联` : `缺少${attributeName}词条` };
   const field = sheetMode ? matches[0] : undefined;
-  if (field && field.type !== 'number') return { reason: '敏捷词条不是数值字段' };
-  const id = field?.fieldId || '敏捷';
+  if (field && field.type !== 'number') return { reason: `${attributeName}词条不是数值字段` };
+  const id = field?.fieldId || attributeName;
   const raw = (sheetMode ? character.fieldValues : character.attributes) as Record<string, unknown> | undefined;
   const base = field?.formula ? character.derived?.breakdown?.[id]?.base : (raw?.[id] ?? field?.defaultValue);
   const value = character.derived?.values?.[id];
@@ -89,13 +92,14 @@ export function characterAgility(
     !Number.isFinite(value) ||
     character.derived?.errors?.[id]
   )
-    return { reason: base === undefined ? '敏捷词条没有设置数值' : '敏捷数据无效或计算失败' };
+    return { reason: base === undefined ? `${attributeName}词条没有设置数值` : `${attributeName}数据无效或计算失败` };
   const effective = Math.max(1, value);
   const modifiers = [...(character.derived?.breakdown?.[id]?.changes || [])];
   const residual = value - base - modifiers.reduce((sum, change) => sum + change.amount, 0);
   if (Math.abs(residual) > 1e-9) modifiers.push({ name: '字段公式或其它计算', amount: residual, kind: 'custom' });
   return {
     agility: {
+      ...(attributeName !== '敏捷' ? { attributeName } : {}),
       fieldId: id,
       base,
       modifiers,
@@ -105,6 +109,14 @@ export function characterAgility(
       visibility: field?.visibility || 'ALL',
     },
   };
+}
+
+export function characterAgility(
+  character: Parameters<typeof characterAttribute>[0],
+  fields: SheetField[],
+  sheetMode: boolean,
+) {
+  return characterAttribute(character, fields, sheetMode);
 }
 
 export function resolveAgilityContest(

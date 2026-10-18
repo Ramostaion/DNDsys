@@ -125,3 +125,21 @@ export function itemData(value: unknown, room: { sheetSchema: unknown; sheetMode
   if ('notes' in data) data.notes = z.string().max(5000).parse(data.notes);
   return data;
 }
+
+export function backpackData(kind: string, value: unknown, room: { sheetSchema: unknown; sheetMode: boolean }) {
+  const data = itemData(value, room);
+  if (kind === '背包') {
+    const fields = Array.isArray(data.customFields) ? (data.customFields as { name: string; value: unknown }[]) : [];
+    const slots = fields.find((field) => field.name === '格数');
+    if (
+      slots &&
+      (typeof slots.value !== 'number' ||
+        !Number.isSafeInteger(slots.value) ||
+        slots.value < 0 ||
+        slots.value > 2147483647)
+    )
+      bad(400, '背包格数必须是非负整数，请将词条类型设为数值');
+    data.customFields = slots ? fields : [{ name: '格数', value: 0 }, ...fields];
+  }
+  return data;
+}

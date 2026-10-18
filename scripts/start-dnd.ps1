@@ -30,6 +30,13 @@ function Test-Port([string]$Address, [int]$Port) {
     } catch { return $false } finally { $client.Dispose() }
 }
 
+function Test-LocalDatabaseReady([int]$Port, [string]$Name) {
+    try {
+        $reply = Invoke-RestMethod -Uri ("http://127.0.0.1:{0}/health" -f $Port) -TimeoutSec 2
+        return $reply.name -eq $Name
+    } catch { return $false }
+}
+
 function Start-Managed([string]$Arguments, [switch]$Quiet) {
     $command = '"{0}" /d /s /c ""{1}" {2}{3}"' -f $env:ComSpec, $pnpmPath, $Arguments, $(if ($Quiet) {' >nul 2>&1'} else {''})
     return $job.Start($env:ComSpec, $command, $projectRoot)
@@ -42,6 +49,22 @@ function Invoke-ManagedCommand([string]$Executable, [string]$Arguments) {
         while (!$process.WaitForExit(250)) { }
         if ($process.ExitCode -ne 0) { throw '环境安装失败，请查看上方提示并检查网络，然后重新双击 BAT。' }
     } finally { $process.Dispose() }
+}
+
+function Start-LocalDatabase {
+    $entry = Join-Path $PSScriptRoot 'launcher-local-database.mjs'
+    $command = '"{0}" /d /s /c ""{1}" "{2}" >>"{3}" 2>&1"' -f $env:ComSpec,$nodePath,$entry,$databaseLog
+    return $job.Start($env:ComSpec, $command, $projectRoot)
+}
+
+function Stop-DatabaseStartup([string]$Message) {
+    if (Test-Path -LiteralPath $databaseLog) {
+        Write-Host '数据库启动日志：' -ForegroundColor Yellow
+        Get-Content -LiteralPath $databaseLog -Encoding UTF8 -Tail 12 | ForEach-Object {
+            Write-Host ([regex]::Replace($_, '(?i)(?:postgres(?:ql)?|prisma\+postgres)://\S+', '[连接地址已省略]'))
+        }
+    }
+    throw "$Message 详细日志：$databaseLog。原数据库未重置。"
 }
 
 function Invoke-Step([string]$Title, [string]$Arguments) {
@@ -154,24 +177,46 @@ try {
         }
         Write-Host '正在启动已有本地数据库…' -ForegroundColor Cyan
         $server = $config.localServer
-        $arguments = '--filter @dnd/api exec prisma dev --name {0} --port {1} --db-port {2} --shadow-db-port {3}' -f $server.name,$server.port,$server.databasePort,$server.shadowDatabasePort
-        $databaseProcess = Start-Managed $arguments -Quiet
+        $runtimeScript = Join-Path $PSScriptRoot 'launcher-database-runtime.mjs'
+        $runtimeOutput = & $nodePath $runtimeScript
+        if ($LASTEXITCODE -ne 0) { throw '数据库运行环境检查失败，原数据未修改。' }
+        $databaseRuntime = $runtimeOutput | ConvertFrom-Json
+        if ($databaseRuntime.needsInstall) {
+            Write-Host '正在准备项目专用数据库运行环境（首次使用需要下载）…' -ForegroundColor Cyan
+            $npmPath = Join-Path (Split-Path $nodePath -Parent) 'npm.cmd'
+            if (!(Test-Path -LiteralPath $npmPath)) { throw '缺少 npm，无法准备数据库运行环境；请使用完整的 Node.js 24 安装。' }
+            Invoke-ManagedCommand $npmPath ('install --prefix "{0}" --cache "{1}" --registry https://registry.npmjs.org --no-audit --no-fund --workspaces=false @prisma/dev@0.25.2 @electric-sql/pglite@0.4.3' -f $databaseRuntime.folder,(Join-Path $projectRoot '.launcher\npm-cache'))
+            $runtimeOutput = & $nodePath $runtimeScript --check
+            if ($LASTEXITCODE -ne 0) { throw '数据库运行环境安装后检查失败。' }
+            $databaseRuntime = $runtimeOutput | ConvertFrom-Json
+        }
+        if (!$databaseRuntime.ready) { throw "数据库运行环境不完整：$($databaseRuntime.reason)。原数据未修改。" }
+        $diagnostic['databaseRuntime'] = $databaseRuntime.folder
+        $databaseLog = Join-Path $projectRoot '.launcher\database-startup.log'
+        $diagnostic['databaseLog'] = $databaseLog
+        Save-StartupDiagnostic
+        [IO.File]::WriteAllText($databaseLog, '', (New-Object System.Text.UTF8Encoding($false)))
+        $databaseProcess = Start-LocalDatabase
         $deadline = [DateTime]::UtcNow.AddSeconds(60)
-        $retryAnnounced = $false
-        while (-not (Test-Port $config.db.host $config.db.port)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw '本地数据库启动失败或超时。请检查原数据库配置；数据没有被重置。' }
+        $databaseRetries = 0
+        # The SQL port can open before Prisma finishes recovering its companion service.
+        # Wait for full startup so a briefly opened port cannot hide a failed process.
+        while (-not (Test-Port $config.db.host $config.db.port) -or -not (Test-LocalDatabaseReady $server.port $server.name)) {
+            if ([DateTime]::UtcNow -gt $deadline) { Stop-DatabaseStartup '本地数据库启动超时。' }
             if ($databaseProcess.HasExited) {
-                if (-not $retryAnnounced) {
-                    Write-Host '上次关闭后的数据库正在恢复，稍候自动重试…' -ForegroundColor DarkGray
-                    $retryAnnounced = $true
-                }
+                $lockRecovery = (Get-Content -LiteralPath $databaseLog -Encoding UTF8 -Tail 3) -match 'ELOCKED|already being held'
+                # The companion service's lock can remain fresh for 30 seconds after a hard close.
+                $maxRetries = if ($lockRecovery) { 12 } else { 2 }
+                if ($databaseRetries -ge $maxRetries) { Stop-DatabaseStartup '本地数据库连续启动失败。' }
+                $databaseRetries++
+                Write-Host "数据库未就绪，正在恢复重试（$databaseRetries/$maxRetries）…" -ForegroundColor DarkGray
                 $databaseProcess.Dispose()
                 # A hard console close can leave a briefly stale Prisma file lock.
                 # Release failed startup descendants and let the CLI recover it.
                 $job.Dispose()
                 $job = New-Object ProjectDnd.LauncherJob
                 Start-Sleep -Seconds 3
-                $databaseProcess = Start-Managed $arguments -Quiet
+                $databaseProcess = Start-LocalDatabase
             }
             Start-Sleep -Milliseconds 400
         }

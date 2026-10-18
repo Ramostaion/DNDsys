@@ -1,3 +1,4 @@
+import { TurnCounter } from '../turns/TurnHUD';
 import { useEffect, useState } from 'react';
 import { Wifi, WifiOff, Copy, Check, Sparkles } from 'lucide-react';
 import type { Snapshot } from '../../api';
@@ -5,15 +6,16 @@ import { useUI } from '../../store';
 import { characterHealth, characterShield } from '../character-summary';
 import ResourceBar from '../ResourceBar';
 import CharacterHoverCard from '../CharacterHoverCard';
+import { roomMemberName } from '@dnd/shared';
 
 function HeroSummary({ c, snap }: { c: any; snap: Snapshot }) {
   const health = characterHealth(snap, c);
   const shield = characterShield(snap, c);
   return (
     <div className="hero-health-summary space-y-2">
-      {shield && <ResourceBar resource={shield} kind="shield" compact />}
+      {shield && <ResourceBar resource={shield} kind="shield" identity={`${c.id}:shield`} compact />}
       {health ? (
-        <ResourceBar resource={health} kind="health" compact />
+        <ResourceBar resource={health} kind="health" identity={`${c.id}:health`} compact />
       ) : (
         <span className="tiny subtle">生命未设置</span>
       )}
@@ -41,7 +43,11 @@ export default function PartyPanel({ snap, me, isGM, online, connected, onError,
   const owned = snap.characters.filter((c) => c.ownerId === me.id);
   const latestRoll = snap.rolls[0];
   const rollerName =
-    latestRoll?.rollerName || snap.members.find((m) => m.userId === latestRoll?.userId)?.user.username || '未知冒险者';
+    latestRoll?.rollerName ||
+    roomMemberName(
+      snap.members.find((m) => m.userId === latestRoll?.userId),
+      '未知冒险者',
+    );
   const rollSummary = latestRoll && (
     <button className="last-roll" aria-label="最近掷骰结果" onClick={() => open('dice')}>
       <Sparkles size={16} />
@@ -75,7 +81,9 @@ export default function PartyPanel({ snap, me, isGM, online, connected, onError,
           {snap.members.map((m) => (
             <div key={m.userId} className="party-member">
               <span className={`presence ${online.has(m.userId) || m.userId === me.id ? 'online' : ''}`} />
-              <span className="truncate flex-1">{m.user.username}</span>
+              <span className="truncate flex-1" title={`账号：${m.user.username}`}>
+                {roomMemberName(m)}
+              </span>
               {m.role === 'GM' && <span className="badge">GM</span>}
             </div>
           ))}
@@ -100,6 +108,7 @@ export default function PartyPanel({ snap, me, isGM, online, connected, onError,
           </button>
         )}
       </div>
+      <TurnCounter session={snap.turnSession} />
       {isGM && rollSummary}
       {owned.length > 0 && (
         <div className="hero-tray">

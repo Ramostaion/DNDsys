@@ -1,0 +1,116 @@
+.clue-notice-envelope {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  perspective: 100px;
+  pointer-events: none;
+}
+.clue-notice-envelope > span {
+  position: absolute;
+  display: block;
+}
+.clue-envelope-back {
+  inset: 16px 1px 2px;
+  border: 1px solid #b99159;
+  border-radius: 4px;
+  background: #493722;
+}
+.clue-envelope-letter {
+  top: 20px;
+  left: 7px;
+  width: 30px;
+  height: 21px;
+  border: 1px solid #bfa579;
+  border-radius: 2px;
+  background: #d9c49c;
+  transform: translateY(-8px);
+  animation: clue-letter-reveal 0.56s ease-out both;
+}
+.clue-envelope-letter::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 17px;
+  height: 9px;
+  background: repeating-linear-gradient(to bottom, #8d7752 0 1px, transparent 1px 4px);
+  opacity: 0.6;
+}
+.clue-envelope-front {
+  inset: 23px 1px 2px;
+  z-index: 2;
+  border: 1px solid #b99159;
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(135deg, #8b693f, #634b30);
+  clip-path: polygon(0 0, 50% 48%, 100% 0, 100% 100%, 0 100%);
+}
+.clue-envelope-flap {
+  top: 16px;
+  left: 1px;
+  width: 42px;
+  height: 17px;
+  z-index: 3;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: linear-gradient(#ac8551, #7b5c36);
+  transform-origin: center top;
+  transform: rotateX(180deg);
+  animation: clue-envelope-open 0.56s ease-out both;
+}
+.clue-envelope-seal {
+  top: 26px;
+  left: 15px;
+  z-index: 4;
+  width: 15px;
+  height: 15px;
+  border: 1px solid #d6a16b;
+  border-radius: 48% 44% 46% 42%;
+  background: #843c35;
+  box-shadow:
+    0 1px 3px #0006,
+    inset 0 0 0 2px #ad665333;
+  text-align: center;
+  color: #e9bd87;
+  font-size: 10px;
+  line-height: 13px;
+  opacity: 0;
+  animation: clue-seal-release 0.44s ease-out both;
+}
+@keyframes clue-envelope-open {
+  0%,
+  22% {
+    transform: rotateX(0);
+  }
+  100% {
+    transform: rotateX(180deg);
+  }
+}
+@keyframes clue-letter-reveal {
+  0%,
+  30% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+@keyframes clue-seal-release {
+  0%,
+  18% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(3px) scale(0.65) rotate(10deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clue-notice-envelope > span {
+    animation: none !important;
+  }
+}

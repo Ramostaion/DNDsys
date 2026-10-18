@@ -38,16 +38,30 @@ export default function CharacterAvatar({ p, character }: { p: Props; character:
   return (
     <div className="character-portrait">
       <CharacterTagBadges snap={p.snap} characterId={character.id}>
-        <div className="sheet-avatar">
-          {character.avatarUrl ? (
-            <img src={character.avatarUrl} alt={`${character.name}头像`} />
-          ) : (
-            <span>{character.name.slice(0, 1)}</span>
-          )}
+        <div className="sheet-avatar-frame">
+          <div className="sheet-avatar">
+            {character.avatarUrl ? (
+              <img src={character.avatarUrl} alt={`${character.name}头像`} />
+            ) : (
+              <span>{character.name.slice(0, 1)}</span>
+            )}
+          </div>
         </div>
       </CharacterTagBadges>
       {can && (
-        <label className={`btn character-avatar-action ${busy ? 'opacity-50' : ''}`}>
+        <label
+          className={`btn character-avatar-action ${busy ? 'opacity-50' : ''}`}
+          title={busy ? '头像上传中' : '更换角色头像'}
+          aria-label={busy ? '头像上传中' : '更换角色头像'}
+          role="button"
+          tabIndex={busy ? -1 : 0}
+          onKeyDown={(event) => {
+            if (!busy && (event.key === 'Enter' || event.key === ' ')) {
+              event.preventDefault();
+              event.currentTarget.querySelector('input')?.click();
+            }
+          }}
+        >
           <Upload size={12} />
           {busy ? '上传中…' : '更换头像'}
           <input

@@ -1,11 +1,12 @@
-import { array, object } from '../data.js';
+import { object } from '../data.js';
+import { normalizeEquipmentSlots, equipmentFitsSlot, isWearable, isHandSlot } from '@dnd/shared';
 import { refreshCharacter } from '../character-values.js';
 import { fail as bad } from '../http.js';
-import { json, str, required, canEditItems, version, itemData } from './helpers.js';
+import { json, str, required, canEditItems, version, itemData, backpackData, characterIn } from './helpers.js';
 import type { OperationContext } from './context.js';
 
 export async function itemOperation(context: OperationContext) {
-  const { tx, room, member, rules, roomId, p } = context;
+  const { tx, room, member, rules, roomId, p, inventoryCharacters } = context;
   let data: any;
   switch (context.type) {
     case 'item.create': {
@@ -17,8 +18,8 @@ export async function itemOperation(context: OperationContext) {
           kind: str(p.kind) || '杂物',
           description: str(p.description),
           imageUrl: p.imageUrl || null,
-          data: json(itemData(p.data, room)),
-          compatibleSlots: json(array(p.compatibleSlots)),
+          data: json(backpackData(str(p.kind), p.data, room)),
+          compatibleSlots: json(normalizeEquipmentSlots(p.compatibleSlots)),
         },
       });
       break;
@@ -36,22 +37,42 @@ export async function itemOperation(context: OperationContext) {
           if (key === 'name') update.name = required(patch.name, '物品名');
           else if (key === 'description') update.description = str(patch.description).slice(0, 5000);
           else if (key === 'data') update.data = json(itemData(patch.data, room));
-          else if (key === 'compatibleSlots') update.compatibleSlots = json(array(patch.compatibleSlots).map(str));
+          else if (key === 'compatibleSlots')
+            update.compatibleSlots = json(normalizeEquipmentSlots(patch.compatibleSlots));
           else update[key] = patch[key];
         }
+      if ('data' in patch || 'kind' in patch)
+        update.data = json(backpackData(str(update.kind ?? item!.kind), update.data ?? item!.data, room));
       const changed = await tx.itemDefinition.updateMany({
         where: { id: item!.id, version: item!.version },
         data: update,
       });
       if (!changed.count) bad(409, '物品已被其他人修改，请刷新');
       data = await tx.itemDefinition.findUniqueOrThrow({ where: { id: item!.id } });
-      if (['data', 'kind', 'name'].some((key) => key in patch)) {
+      if (['data', 'kind', 'name', 'compatibleSlots'].some((key) => key in patch)) {
         const equipped = await tx.equippedItem.findMany({
           where: { entry: { itemId: item!.id } },
           select: { characterId: true },
         });
-        for (const characterId of new Set(equipped.map((e) => e.characterId)))
+        for (const characterId of new Set(equipped.map((e) => e.characterId))) {
+          const c = await characterIn(tx, roomId, characterId);
+          const affected = c.equipment.filter((e) => e.entry.itemId === item!.id);
+          const remove = new Set(
+            affected
+              .filter((e) => !isWearable(data.kind) || !equipmentFitsSlot(data.compatibleSlots, e.slot, data.kind))
+              .map((e) => e.id),
+          );
+          // Changing an already worn item into a two-handed weapon reserves both hands immediately.
+          if (data.kind === '双手武器') {
+            if (!['主手', '副手'].every((s) => (room.equipmentSlots as string[]).includes(s)))
+              for (const e of affected) remove.add(e.id);
+            const kept = affected.find((e) => !remove.has(e.id));
+            if (kept) for (const e of c.equipment) if (e.id !== kept.id && isHandSlot(e.slot)) remove.add(e.id);
+          }
+          if (remove.size) await tx.equippedItem.deleteMany({ where: { id: { in: [...remove] } } });
+          inventoryCharacters.add(characterId);
           await refreshCharacter(tx, characterId, rules);
+        }
       }
       break;
     }

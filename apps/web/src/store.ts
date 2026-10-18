@@ -25,7 +25,9 @@ export type WindowType =
   | 'character-tags'
   | 'tag-detail'
   | 'tag-library'
-  | 'tag-overview';
+  | 'tag-overview'
+  | 'initiative-settings'
+  | 'turn-system';
 export type WindowState = {
   id: string;
   type: WindowType;
@@ -35,7 +37,8 @@ export type WindowState = {
   w: number;
   h: number;
   z: number;
-  minimized: boolean;
+  motion?: 'closing';
+  motionId?: string;
 };
 type UI = {
   windows: WindowState[];
@@ -44,11 +47,10 @@ type UI = {
   setCloseGuard: (id: string, guard?: () => boolean) => void;
   open: (type: WindowType, entityId?: string) => void;
   toggle: (type: WindowType, entityId?: string) => void;
-  close: (id: string) => void;
+  close: (id: string, options?: { immediate?: boolean }) => void;
   focus: (id: string) => void;
   move: (id: string, x: number, y: number) => void;
   resize: (id: string, w: number, h: number) => void;
-  minimize: (id: string) => void;
 };
 export const useUI = create<UI>((set, get) => ({
   windows: [],
@@ -69,8 +71,10 @@ export const useUI = create<UI>((set, get) => ({
     }
     const n = get().windows.length;
     const tagWindow = type.includes('tag');
-    const w =
-      type === 'clue-image'
+    const turnWindow = ['initiative-settings', 'turn-system'].includes(type);
+    const w = turnWindow
+      ? 730
+      : type === 'clue-image'
         ? 760
         : type === 'private-clues'
           ? 660
@@ -83,21 +87,23 @@ export const useUI = create<UI>((set, get) => ({
                 : ['quests', 'maps', 'item', 'items', 'inventory', 'templates'].includes(type)
                   ? 580
                   : 520;
-    const h = ['private-clues', 'clue-reader', 'clue-sent', 'clue-image'].includes(type)
-      ? 650
-      : type === 'item' || type === 'templates'
-        ? 640
-        : type === 'character' || tagWindow
-          ? 620
-          : type === 'inventory'
-            ? 600
-            : type === 'items'
-              ? 560
-              : type === 'dice'
-                ? 570
-                : type === 'quests' || type === 'maps'
-                  ? 540
-                  : 480;
+    const h = turnWindow
+      ? 680
+      : ['private-clues', 'clue-reader', 'clue-sent', 'clue-image'].includes(type)
+        ? 650
+        : type === 'item' || type === 'templates'
+          ? 640
+          : type === 'character' || tagWindow
+            ? 620
+            : type === 'inventory'
+              ? 600
+              : type === 'items'
+                ? 560
+                : type === 'dice'
+                  ? 570
+                  : type === 'quests' || type === 'maps'
+                    ? 540
+                    : 480;
     const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth,
       viewportHeight = typeof window === 'undefined' ? 800 : window.innerHeight;
     let x = 0,
@@ -109,29 +115,43 @@ export const useUI = create<UI>((set, get) => ({
     }
     set((s) => ({
       topZ: s.topZ + 1,
-      windows: [...s.windows, { id: createId(), type, entityId, x, y, w, h, z: s.topZ + 1, minimized: false }],
+      windows: [...s.windows, { id: createId(), type, entityId, x, y, w, h, z: s.topZ + 1 }],
     }));
   },
   toggle: (type, entityId) => {
     const old = get().windows.find((w) => w.type === type && w.entityId === entityId);
     if (!old) get().open(type, entityId);
-    else if (old.minimized) get().focus(old.id);
+    else if (old.motion) get().focus(old.id);
     else get().close(old.id);
   },
-  close: (id) => {
+  close: (id, options) => {
+    if (get().windows.find((w) => w.id === id)?.motion === 'closing' && !options?.immediate) return;
     if (get().closeGuards[id] && !get().closeGuards[id]()) return;
-    get().setCloseGuard(id);
-    set((s) => ({ windows: s.windows.filter((w) => w.id !== id) }));
+    const motionId = createId();
+    set((s) => ({ windows: s.windows.map((w) => (w.id === id ? { ...w, motion: 'closing', motionId } : w)) }));
+    const finish = () => {
+      if (get().windows.find((w) => w.id === id)?.motionId !== motionId) return;
+      get().setCloseGuard(id);
+      set((s) => ({ windows: s.windows.filter((w) => w.id !== id) }));
+    };
+    if (
+      options?.immediate ||
+      typeof window === 'undefined' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    )
+      finish();
+    else setTimeout(finish, 120);
   },
   focus: (id) =>
     set((s) => ({
       topZ: s.topZ + 1,
-      windows: s.windows.map((w) => (w.id === id ? { ...w, z: s.topZ + 1, minimized: false } : w)),
+      windows: s.windows.map((w) =>
+        w.id === id ? { ...w, z: s.topZ + 1, motion: undefined, motionId: undefined } : w,
+      ),
     })),
   move: (id, x, y) => set((s) => ({ windows: s.windows.map((w) => (w.id === id ? { ...w, x, y } : w)) })),
   resize: (id, w, h) =>
     set((s) => ({
       windows: s.windows.map((win) => (win.id === id ? { ...win, w: Math.max(340, w), h: Math.max(240, h) } : win)),
     })),
-  minimize: (id) => set((s) => ({ windows: s.windows.map((w) => (w.id === id ? { ...w, minimized: true } : w)) })),
 }));

@@ -1,0 +1,244 @@
+.state-details {
+  color: #e7e0d3;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.state-details-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0 17px;
+}
+.state-details-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--state-accent) 48%, transparent);
+  border-radius: 14px;
+  color: var(--state-accent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--state-accent) 13%, #151d23), #10181f);
+  box-shadow: inset 0 1px #ffffff08;
+}
+.state-details-title {
+  min-width: 0;
+}
+.state-details-title > .eyebrow {
+  font-size: 10px;
+  color: #9d9382;
+  letter-spacing: 0.15em;
+}
+.state-details-title h2,
+.state-details-title h3 {
+  margin: 4px 0 0;
+  font-family: var(--font-display, serif);
+  font-size: 23px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #ebdfc5;
+}
+.state-details-owner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0 0;
+  color: #a9a393;
+  font-size: 12px;
+}
+.state-details-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 0 0 18px;
+}
+.state-details-duration,
+.state-details-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.state-details-duration {
+  border: 1px solid #9ca9b426;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #b9c2c7;
+  background: #aabcc107;
+}
+.state-details-duration.is-finite {
+  color: #dfc27d;
+  border-color: #d4af5733;
+  background: #d4af570b;
+}
+.state-details-visibility {
+  color: #9d9e9a;
+}
+.state-details-section {
+  margin-bottom: 17px;
+}
+.state-details-section > h4 {
+  margin: 0 0 9px;
+  color: #b5a386;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+.state-details-description {
+  padding: 15px 16px;
+  border: 1px solid #d4af5718;
+  border-radius: 10px;
+  background: #09101769;
+}
+.state-details .tag-markdown {
+  color: #d6d4ca;
+  font-size: 14px;
+  line-height: 1.85;
+}
+.state-details .tag-markdown > :first-child {
+  margin-top: 0;
+}
+.state-details .tag-markdown > :last-child {
+  margin-bottom: 0;
+}
+.state-details-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.state-details-fields > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #ffffff0b;
+  border-radius: 7px;
+  background: #ffffff03;
+}
+.state-details-fields dt {
+  color: #a8adb0;
+  font-size: 12px;
+  flex-shrink: 0;
+  max-width: 55%;
+}
+.state-details-fields dd {
+  margin: 0;
+  white-space: pre-wrap;
+  text-align: right;
+  font-size: 13px;
+}
+.state-details-fields dd[data-numeric='true'] {
+  color: #d8bd7b;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.state-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid #d4af5724;
+}
+.state-detail-actions .btn {
+  font-size: 12px;
+  padding: 7px 11px;
+}
+.state-detail-actions .state-detail-remove {
+  margin-left: auto;
+  color: #cc9490;
+  border-color: #ba6a5d3d;
+  background: #84382c0a;
+}
+.state-detail-audit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 10px;
+  color: #8d918d;
+  padding-top: 3px;
+}
+.state-detail-archived {
+  color: #bea16b;
+  font-size: 11px;
+  padding-bottom: 8px;
+}
+.state-hover-card {
+  z-index: 12000;
+  width: 350px;
+  max-width: calc(100vw - 24px);
+  max-height: min(460px, calc(100vh - 24px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 17px;
+  border: 1px solid #b2975a75;
+  border-radius: 13px;
+  color: #e7e0d3;
+  background: linear-gradient(145deg, #182027fc, #10171dfc);
+  box-shadow:
+    0 14px 38px #0009,
+    inset 0 1px #f3dba60a;
+}
+.state-details.is-compact .state-details-header {
+  gap: 10px;
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+.state-details.is-compact .state-details-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.state-details.is-compact .state-details-title h3 {
+  font-size: 18px;
+}
+.state-details.is-compact .state-details-meta {
+  gap: 7px;
+  padding-bottom: 13px;
+}
+.state-details.is-compact .state-details-section {
+  margin-bottom: 12px;
+}
+.state-details.is-compact .state-details-section:last-child {
+  margin-bottom: 0;
+}
+.state-details.is-compact .state-details-description {
+  padding: 12px;
+}
+.state-details.is-compact .tag-markdown {
+  font-size: 13px;
+  line-height: 1.75;
+}
+.state-details.is-compact .state-details-fields > div {
+  padding: 8px 9px;
+  gap: 6px;
+}
+.tag-detail-view {
+  padding: 2px 1px;
+}
+.tag-avatar-badge:focus-visible,
+.turn-state:focus-visible {
+  outline: 2px solid #d4af57;
+  outline-offset: 3px;
+}
+@media (max-width: 520px) {
+  .state-details-title h2 {
+    font-size: 20px;
+  }
+  .state-details-header {
+    gap: 11px;
+  }
+  .state-details-icon {
+    width: 46px;
+    height: 46px;
+  }
+  .state-details-fields {
+    grid-template-columns: 1fr;
+  }
+  .state-detail-actions .state-detail-remove {
+    margin-left: 0;
+  }
+}

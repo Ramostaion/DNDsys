@@ -1,8 +1,12 @@
+import StateName, { RomanNumeralSelect } from './StateName';
+import DurationInput from './DurationInput';
 import { useEffect, useState } from 'react';
 import { TAG_DETAILS_MAX, type CharacterTag, type TagVisibility } from '@dnd/shared';
 import { VisibilitySelect, TagIcon, visibilityNames } from './TagIcon';
 import TagMarkdown from './TagMarkdown';
 import { useDraftProtection } from './useDraftProtection';
+import CustomFieldsEditor from '../CustomFieldsEditor';
+import { validateItemFields } from '../item-fields';
 import type { TagProps } from './types';
 export default function CharacterTagEditor({
   p,
@@ -22,6 +26,9 @@ export default function CharacterTagEditor({
     visibility: tag.visibility,
     priority: tag.priority,
     sortOrder: tag.sortOrder,
+    customFields: tag.customFields || [],
+    remainingTurns: tag.remainingTurns ?? null,
+    romanNumeral: tag.romanNumeral || '',
   });
   const [base, setBase] = useState(draft),
     [version, setVersion] = useState(tag.version),
@@ -37,6 +44,9 @@ export default function CharacterTagEditor({
       visibility: tag.visibility,
       priority: tag.priority,
       sortOrder: tag.sortOrder,
+      customFields: tag.customFields || [],
+      remainingTurns: tag.remainingTurns ?? null,
+      romanNumeral: tag.romanNumeral || '',
     };
     setDraft(next);
     setBase(next);
@@ -51,19 +61,38 @@ export default function CharacterTagEditor({
         visibility: tag.visibility,
         priority: tag.priority,
         sortOrder: tag.sortOrder,
+        customFields: tag.customFields || [],
+        remainingTurns: tag.remainingTurns ?? null,
+        romanNumeral: tag.romanNumeral || '',
       };
       setDraft(next);
       setBase(next);
       setVersion(tag.version);
     }
-  }, [tag.version, tag.detailsMarkdown, tag.visibility, tag.priority, tag.sortOrder, dirty, version]);
+  }, [
+    tag.version,
+    tag.detailsMarkdown,
+    tag.visibility,
+    tag.priority,
+    tag.sortOrder,
+    tag.customFields,
+    tag.remainingTurns,
+    tag.romanNumeral,
+    dirty,
+    version,
+  ]);
   async function save() {
     if (removed) return;
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      const result = await p.mutate('characterTag.update', { id: tag.id, version, ...draft });
+      const result = await p.mutate('characterTag.update', {
+        id: tag.id,
+        version,
+        ...draft,
+        customFields: validateItemFields(draft.customFields),
+      });
       setVersion(result.version);
       setBase(draft);
       setMessage('保存成功');
@@ -79,9 +108,16 @@ export default function CharacterTagEditor({
         <span style={{ color: tag.definition.color }}>
           <TagIcon icon={tag.definition.icon} size={24} />
         </span>
-        <strong>{tag.definition.name}</strong>
+        <strong>
+          <StateName name={tag.definition.name} numeral={draft.romanNumeral} />
+        </strong>
         <span className="tiny subtle">独立角色备注</span>
       </div>
+      <RomanNumeralSelect
+        value={draft.romanNumeral}
+        onChange={(romanNumeral) => setDraft({ ...draft, romanNumeral })}
+        disabled={busy || removed}
+      />
       <div className="tag-form-grid">
         <VisibilitySelect
           value={draft.visibility}
@@ -123,11 +159,21 @@ export default function CharacterTagEditor({
           placeholder="写下秘密、线索和后续计划。支持 Markdown；仅保存时同步。"
         />
       )}
+      <DurationInput
+        value={draft.remainingTurns}
+        onChange={(remainingTurns) => setDraft({ ...draft, remainingTurns })}
+      />
+      <CustomFieldsEditor
+        fields={draft.customFields}
+        onChange={(customFields) => setDraft({ ...draft, customFields })}
+        disabled={busy || removed}
+        hint="数值词条与基础信息名称一致时自动加成；文字仅作记录。"
+      />
       <div className="tiny subtle">
         {draft.detailsMarkdown.length.toLocaleString()} / {TAG_DETAILS_MAX.toLocaleString()} 字符 · 当前范围：
         {visibilityNames[draft.visibility]}
       </div>
-      {removed && <div className="tag-conflict">此标签已被其他窗口移除；草稿仍保留，可复制到新备注。</div>}
+      {removed && <div className="tag-conflict">此状态已被其他窗口移除；草稿仍保留，可复制到新备注。</div>}
       {version !== tag.version && (
         <div className="tag-conflict">其他窗口已更新此备注；当前草稿已保留。请复制草稿或重新加载后再编辑。</div>
       )}
@@ -176,7 +222,7 @@ export default function CharacterTagEditor({
             className="btn"
             disabled={busy}
             onClick={() => {
-              if (!dirty || confirm('返回标签列表会丢弃未保存草稿，确定返回？')) onBack();
+              if (!dirty || confirm('返回状态列表会丢弃未保存草稿，确定返回？')) onBack();
             }}
           >
             返回列表

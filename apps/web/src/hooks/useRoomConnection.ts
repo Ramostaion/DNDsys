@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import type { PublicDiceEvent, CombatBroadcast, TokenMoveEvent } from '@dnd/shared';
+import { notifyCombatDrafts } from '../ui/combat/useCombatDraft';
 
 type Options = {
   roomId: string | undefined;
@@ -36,6 +37,7 @@ export function useRoomConnection(options: Options) {
       void callbacks.current.refresh();
       void callbacks.current.refreshPresentation();
       void callbacks.current.refreshClues();
+      notifyCombatDrafts(roomId, true);
     };
     const offline = () => {
       if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -89,6 +91,13 @@ export function useRoomConnection(options: Options) {
           callbacks.current.diceChanged(notice.data);
         if (notice.event === 'combat.record' && 'recordId' in notice.data) callbacks.current.combatChanged(notice.data);
         if (notice.event === 'token.moved' && 'tokenId' in notice.data) callbacks.current.tokenMoved(notice.data);
+        if (notice.event === 'member.profile') void callbacks.current.refreshClues();
+        if (
+          /^(tags\.changed$|character\.|sheet\.|equipment\.|inventory\.|item\.|template\.|member\.|room\.|trade\.|combat\.record$|turn\.)/.test(
+            notice.event,
+          )
+        )
+          notifyCombatDrafts(roomId);
         void callbacks.current.refresh();
       },
     );
@@ -97,6 +106,9 @@ export function useRoomConnection(options: Options) {
     );
     socket.on('privateClue.changed', (event: { roomId: string; kind: string }) => {
       if (event.roomId === roomId) void callbacks.current.refreshClues(event.kind === 'delivered');
+    });
+    socket.on('combatDraft.changed', (event: { roomId: string }) => {
+      if (event.roomId === roomId) notifyCombatDrafts(roomId);
     });
     socket.on('kicked', () => callbacks.current.onKicked());
     socket.on('room:deleted', (event: { roomId: string }) => {

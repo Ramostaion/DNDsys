@@ -3,6 +3,7 @@ import type { Prisma, RoomMember } from '@prisma/client';
 import { PUBLIC_DICE_COOLDOWN_MS, rollDice } from '@dnd/shared';
 import { object } from './data.js';
 import { fail } from './http.js';
+import { roomActorName } from './room-member-profile.js';
 
 /** Called with the room row locked, in the same transaction as its operation receipt. */
 export async function recordFreeRoll(
@@ -38,7 +39,7 @@ export async function recordFreeRoll(
         remainingMs: Math.max(0, cooldownUntil - serverNow),
       },
     );
-  const actor = await tx.user.findUniqueOrThrow({ where: { id: args.userId }, select: { username: true } });
+  const actorName = await roomActorName(tx, args.roomId, args.userId);
   let result: ReturnType<typeof rollDice>;
   try {
     result = rollDice(
@@ -68,7 +69,7 @@ export async function recordFreeRoll(
       roomId: args.roomId,
       userId: args.userId,
       characterId: args.characterId,
-      rollerName: actor.username,
+      rollerName: actorName,
       rollerRole: args.member.role,
       expression: args.expression,
       reason: args.reason,

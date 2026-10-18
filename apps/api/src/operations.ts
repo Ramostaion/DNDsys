@@ -7,9 +7,10 @@ import { memberCan } from './permissions.js';
 import { fail as bad } from './http.js';
 import { unlink } from 'node:fs/promises';
 import { arrangeInventory } from './inventory-layout.js';
-import { json, str, requestId, editable } from './operations/helpers.js';
+import { json, str, requestId, editable, gm } from './operations/helpers.js';
 import { dispatchOperation } from './operations/dispatch.js';
 import { visibleCombatRecord } from './combat-visibility.js';
+import { visibleCharacterTags } from './character-tags.js';
 export function registerOperations(
   app: express.Express,
   db: PrismaClient,
@@ -27,18 +28,36 @@ export function registerOperations(
       const input = z
         .object({ id: z.string(), type: z.string(), payload: z.record(z.string(), z.any()).default({}) })
         .parse(req.body);
+      const locked =
+        ['dice.roll', 'combat.record'].includes(input.type) ||
+        ['drawing.', 'turn.', 'initiative.', 'characterTag.', 'tagDefinition.'].some((prefix) =>
+          input.type.startsWith(prefix),
+        );
       const opId = requestId(input.id),
         p = input.payload;
       const member = await db.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } });
       if (!member) bad(403, '你不是该房间成员');
+      if (input.type.startsWith('turn.') || input.type.startsWith('initiative.')) gm(member!);
       const room = await db.room.findUniqueOrThrow({ where: { id: roomId } }),
         rules = rulesOf(room.rules);
       const result = await db.$transaction(
         async (tx) => {
-          // Dice and drawing history use the room row lock with READ COMMITTED:
-          // concurrent requests see committed receipts and the latest edit state.
-          if (['dice.roll', 'combat.record'].includes(input.type) || input.type.startsWith('drawing.'))
-            await tx.$executeRaw`SELECT id FROM "Room" WHERE id = ${roomId} FOR UPDATE`;
+          // Short room-scoped mutations serialize before receipt/version checks.
+          // READ COMMITTED sees the latest state after waiting for this lock.
+          if (locked) {
+            // A mutex without blocking unrelated foreign-key inserts into this room.
+            if (
+              ['turn.', 'initiative.', 'characterTag.', 'tagDefinition.'].some((prefix) =>
+                input.type.startsWith(prefix),
+              )
+            )
+              await tx.$executeRaw`SELECT id FROM "Room" WHERE id = ${roomId} FOR NO KEY UPDATE`;
+            else await tx.$executeRaw`SELECT id FROM "Room" WHERE id = ${roomId} FOR UPDATE`;
+          }
+          if (input.type.startsWith('turn.') || input.type.startsWith('initiative.')) {
+            const currentMember = await tx.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } });
+            if (!currentMember || currentMember.role !== 'GM') bad(403, '仅主持人可以管理回合与先手');
+          }
           const previous = await tx.operationReceipt.findUnique({ where: { id: opId } });
           if (previous) {
             if (previous.userId !== userId || previous.roomId !== roomId) bad(409, '操作 ID 冲突');
@@ -97,16 +116,14 @@ export function registerOperations(
                 userId,
                 action: input.type,
                 entityId: str(data?.id) || null,
-                data: json({ operationId: opId }),
+                data: json(input.type.startsWith('turn.') ? { operationId: opId, ...data } : { operationId: opId }),
               },
             });
           return { data, duplicate: false };
         },
         {
-          isolationLevel:
-            ['dice.roll', 'combat.record'].includes(input.type) || input.type.startsWith('drawing.')
-              ? 'ReadCommitted'
-              : 'Serializable',
+          isolationLevel: locked ? 'ReadCommitted' : 'Serializable',
+          maxWait: 15000,
           timeout: 10000,
         },
       );
@@ -129,6 +146,7 @@ export function registerOperations(
               d20: contest.attacker.d20,
               effective: contest.attacker.effective,
               bonus: contest.attacker.bonus,
+              attributeName: contest.attacker.attributeName || '敏捷',
               total: contest.attacker.total,
             },
             defender: {
@@ -185,18 +203,26 @@ export function registerOperations(
       if (input.type === 'combat.record' && member!.role !== 'GM' && response?.data?.contest) {
         const ids = [response.data.contest.attacker.id, response.data.contest.defender.id];
         const characters = await db.character.findMany({ where: { roomId, id: { in: ids } } });
-        response = visibleCombatRecord(response, (id) => {
-          const c = characters.find((candidate) => candidate.id === id);
-          return (
-            !!c &&
-            canViewCharacterInventory(
-              member!,
-              { ...c, healthCurrent: characterCurrentHealth(room, c) },
-              userId,
-              memberCan(room, member!, 'viewOtherInventories'),
-            )
-          );
-        });
+        const tags = await visibleCharacterTags(db, roomId, userId, false, characters, false);
+        response = visibleCombatRecord(
+          response,
+          (id) => {
+            const c = characters.find((candidate) => candidate.id === id);
+            return (
+              !!c &&
+              canViewCharacterInventory(
+                member!,
+                { ...c, healthCurrent: characterCurrentHealth(room, c) },
+                userId,
+                memberCan(room, member!, 'viewOtherInventories'),
+              )
+            );
+          },
+          (id) => tags.characterTags.some((tag) => tag.id === id),
+        );
+      }
+      if (member!.role !== 'GM' && response && typeof response === 'object') {
+        response = { ...response, initiativeConfig: undefined, initiativePresetId: undefined };
       }
       res.json(
         input.type === 'dice.roll' && result.data?.visibility === 'PUBLIC'

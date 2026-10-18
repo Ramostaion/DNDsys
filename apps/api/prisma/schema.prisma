@@ -21,6 +21,7 @@ model User {
   logs ActivityLog[]
   diceRolls DiceRoll[]
   combatEvents CombatEvent[]
+  combatDrafts CombatDraft[]
 }
 model Room {
   id String @id @default(cuid())
@@ -36,7 +37,10 @@ model Room {
   sheetMode Boolean @default(false)
   permissionMode String @default("MIXED")
   permissionSettings Json @default("{}")
-  equipmentSlots Json @default("[\"主手\",\"副手\",\"头部\",\"胸部\",\"手臂\",\"手部\",\"腿部\",\"鞋\",\"饰品1\",\"饰品2\",\"饰品3\",\"饰品4\"]")
+  equipmentSlots Json @default("[\"主手\",\"副手\",\"头部\",\"胸部\",\"背包\",\"手臂\",\"手部\",\"腿部\",\"鞋\",\"饰品1\",\"饰品2\",\"饰品3\",\"饰品4\"]")
+  initiativePresetId String?
+  initiativePresets InitiativePreset[]
+  turnSessions TurnSession[]
   version Int @default(0)
   createdAt DateTime @default(now())
   members RoomMember[]
@@ -53,6 +57,7 @@ model Room {
   encounters CombatEncounter[]
   diceRolls DiceRoll[]
   combatEvents CombatEvent[]
+  combatDrafts CombatDraft[]
   trades TradeRequest[]
   presentationAssets PresentationAsset[]
   presentationSession PresentationSession?
@@ -128,6 +133,7 @@ model ClueAttachmentLink {
 model RoomMember {
   roomId String
   userId String
+  displayName String?
   room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   role String @default("PLAYER")
@@ -161,6 +167,7 @@ model Character {
   inventorySlots Int @default(24)
   derived Json @default("{}")
   attackProfiles Json @default("[]")
+  initiativeConfig Json @default("{}")
   version Int @default(0)
   createdAt DateTime @default(now())
   inventory InventoryEntry[]
@@ -195,6 +202,7 @@ model Map {
   tokens MapToken[]
   drawings DrawingOperation[]
   drawingHistory DrawingHistory[]
+  turnSessions TurnSession[]
   @@index([roomId,parentId])
 }
 model MapPortal {
@@ -405,6 +413,26 @@ model CombatEvent {
   @@index([encounterId,createdAt])
 }
 
+model CombatDraft {
+  id String @id
+  roomId String
+  userId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  revision Int
+  eventId String
+  actorId String?
+  targetId String?
+  privateRecord Boolean @default(false)
+  fingerprint String @default("")
+  adjudication Json @default("{}")
+  state String @default("ACTIVE")
+  recordId String?
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+  @@index([roomId,state,expiresAt])
+}
+
 model TradeRequest {
   id String @id @default(cuid())
   roomId String
@@ -494,8 +522,11 @@ model TagDefinition {
   name String
   icon String @default("clue")
   color String @default("#c69452")
+  romanNumeral String @default("")
   templateDescription String @default("")
-  defaultVisibility String @default("GM_ONLY")
+  defaultVisibility String @default("PUBLIC")
+  defaultDurationTurns Int?
+  customFields Json @default("[]")
   defaultPriority Int @default(0)
   isArchived Boolean @default(false)
   version Int @default(0)
@@ -514,8 +545,11 @@ model CharacterTag {
   character Character @relation(fields:[characterId,roomId],references:[id,roomId],onDelete:Cascade)
   tagDefinitionId String
   definition TagDefinition @relation(fields:[tagDefinitionId,roomId],references:[id,roomId],onDelete:Restrict)
+  romanNumeral String @default("")
   detailsMarkdown String @default("")
-  visibility String @default("GM_ONLY")
+  visibility String @default("PUBLIC")
+  customFields Json @default("[]")
+  remainingTurns Int?
   priority Int @default(0)
   sortOrder Int @default(0)
   version Int @default(0)
@@ -524,4 +558,36 @@ model CharacterTag {
   @@unique([characterId,tagDefinitionId])
   @@index([roomId,characterId])
   @@index([tagDefinitionId])
+}
+
+model InitiativePreset {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  name String
+  weights Json
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([roomId])
+}
+
+model TurnSession {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  mapId String?
+  map Map? @relation(fields:[mapId],references:[id],onDelete:SetNull)
+  mapName String
+  status String @default("ACTIVE")
+  round Int @default(1)
+  totalRounds Int?
+  currentCharacterId String?
+  participants Json
+  lastTransition Json @default("{}")
+  lastAdvancedAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([roomId,status])
 }

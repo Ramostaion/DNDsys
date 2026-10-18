@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { BookOpen, Plus, Link2, Copy } from 'lucide-react';
+import CustomFieldsEditor, { CustomFieldsDetails } from './CustomFieldsEditor';
+import { itemFields, validateItemFields, type ItemField } from './item-fields';
 import HoverInfo from './HoverInfo';
 import type { Snapshot } from '../api';
 import { canCapability, canEditCharacter } from '../permissions';
@@ -10,7 +12,7 @@ type Props = {
   isGM: boolean;
   mutate: (type: string, payload: Record<string, unknown>) => Promise<any>;
 };
-const labels: Record<string, string> = { TRAIT: '特性', SKILL: '技能', SPECIAL: '特殊机制' };
+const labels: Record<string, string> = { SKILL: '技能', TRAIT: '特性', SPECIAL: '特殊机制' };
 function Editor({
   p,
   template,
@@ -23,9 +25,12 @@ function Editor({
   onDone: () => void;
 }) {
   const [name, setName] = useState(template?.name || ''),
-    [kind, setKind] = useState(template?.kind || (creationKind === 'ALL' ? 'TRAIT' : creationKind)),
+    [kind, setKind] = useState(template?.kind || (creationKind === 'ALL' ? 'SKILL' : creationKind)),
     [description, setDescription] = useState(template?.description || ''),
     [iconUrl, setIconUrl] = useState(template?.iconUrl || ''),
+    [customFields, setCustomFields] = useState<ItemField[]>(
+      Array.isArray(template?.data?.customFields) ? itemFields(template.data) : [],
+    ),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const sharedCount = template
@@ -63,10 +68,11 @@ function Editor({
       setError('请输入名称');
       return;
     }
-    const data = { ...(template?.data || {}) };
+
     setBusy(true);
     setError('');
     try {
+      const data = { ...(template?.data || {}), customFields: validateItemFields(customFields) };
       if (template)
         await p.mutate('template.update', {
           id: template.id,
@@ -148,6 +154,14 @@ function Editor({
           placeholder="用途、效果和使用条件，由 GM 按规则裁决。"
         />
       </label>
+      {kind === 'SKILL' && (
+        <CustomFieldsEditor
+          fields={customFields}
+          onChange={setCustomFields}
+          disabled={busy}
+          hint="技能词条仅作记录，不改变人物卡基础信息。"
+        />
+      )}
       {template && <p className="tiny subtle">保存会更新 {sharedCount} 个共享安装；独立副本保持原值。</p>}
       {error && (
         <p role="alert" className="tiny text-red-300">
@@ -187,9 +201,10 @@ function InstallOptions({ onApply }: { onApply: (shared: boolean) => void }) {
   );
 }
 export default function TemplateLibrary({ p, characterId }: { p: Props; characterId?: string }) {
-  const [kind, setKind] = useState(characterId ? 'SKILL' : 'ALL'),
+  const [kind, setKind] = useState('SKILL'),
     [editing, setEditing] = useState<string | null>(null),
     [creating, setCreating] = useState<string | null>(null),
+    [toggling, setToggling] = useState(false),
     [error, setError] = useState('');
   const character = p.snap.characters.find((c) => c.id === characterId),
     canApply = Boolean(
@@ -231,7 +246,51 @@ export default function TemplateLibrary({ p, characterId }: { p: Props; characte
       {character && (
         <p className="tiny subtle">当前角色：{character.name}。共享安装随模板更新；独立副本保持当前版本。</p>
       )}
-      <div className="flex flex-wrap gap-2">
+      {character && (
+        <section className="panel rounded p-3 space-y-2" aria-label="角色特性开关">
+          <h3 className="font-semibold text-sm">已安装特性</h3>
+          <div className="flex flex-wrap gap-2">
+            {(character.traits || [])
+              .filter(
+                (trait: any) =>
+                  trait.kind !== 'SPECIAL' &&
+                  !p.snap.templates.some((template) => template.id === trait.templateId && template.kind === 'SPECIAL'),
+              )
+              .map((trait: any) => (
+                <span
+                  className={`badge ${trait.enabled === false ? 'opacity-60' : ''}`}
+                  key={trait.id}
+                  title={trait.description}
+                >
+                  {trait.name}
+                  <span className="tiny subtle ml-1">{trait.enabled === false ? '已停用' : '已启用'}</span>
+                  {canEditCharacter(p.snap, p.me.id, character) && (
+                    <button
+                      className="ml-2 text-amber-300"
+                      disabled={toggling}
+                      aria-label={`${trait.enabled === false ? '启用' : '停用'}特性：${trait.name}`}
+                      onClick={async () => {
+                        setToggling(true);
+                        await run('template.enable', {
+                          characterId: character.id,
+                          field: 'traits',
+                          instanceId: trait.id,
+                          enabled: trait.enabled === false,
+                          version: character.version,
+                        });
+                        setToggling(false);
+                      }}
+                    >
+                      {trait.enabled === false ? '启用' : '停用'}
+                    </button>
+                  )}
+                </span>
+              ))}
+          </div>
+          {!character.traits?.length && <p className="tiny subtle">尚未安装特性，由GM添加后可在此启停。</p>}
+        </section>
+      )}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="能力类型筛选">
         {[['ALL', '全部'], ...Object.entries(labels)].map(([value, label]) => (
           <button
             key={value}
@@ -263,6 +322,7 @@ export default function TemplateLibrary({ p, characterId }: { p: Props; characte
                 {template.name} <span className="badge">{labels[template.kind] || template.kind}</span>
               </div>
               <p className="tiny subtle mt-1 whitespace-pre-wrap">{template.description || '暂无说明'}</p>
+              <CustomFieldsDetails fields={template.data?.customFields} />
             </div>
             <div className="flex flex-col gap-1">
               {p.isGM && (

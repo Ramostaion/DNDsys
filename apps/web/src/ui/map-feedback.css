@@ -1,0 +1,42 @@
+.map-tool-status {
+  padding: 6px 7px;
+  margin-top: 7px;
+  border-left: 2px solid #ba965e;
+  border-radius: 0 4px 4px 0;
+  background: #302a2077;
+  color: #d6c6aa;
+  font-size: 11px;
+  line-height: 1.5;
+  animation: map-tool-arrive 0.16s ease-out;
+}
+.map-tool-status strong {
+  color: #edcf97;
+  font-weight: 500;
+}
+.map-selection-label {
+  font-size: 11px;
+  color: #d6c6aa;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 5px;
+}
+.map-selection-label > span {
+  color: #edcf97;
+}
+@keyframes map-tool-arrive {
+  from {
+    opacity: 0.3;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-tool-status {
+    animation: none;
+  }
+}

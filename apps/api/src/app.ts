@@ -14,6 +14,7 @@ import { registerPresentation } from './presentation.js';
 import { registerPrivateClues } from './private-clues.js';
 import { errorHandler } from './error-handler.js';
 import { registerWebRoutes } from './web-static.js';
+import { registerCombatDrafts } from './combat-drafts.js';
 
 /** Compose modules without opening a port, connecting the database or modifying stored data. */
 export function createApplication(db: PrismaClient, config: ApiConfig) {
@@ -52,6 +53,9 @@ export function createApplication(db: PrismaClient, config: ApiConfig) {
   registerRoomRoutes(app, context, realtime.kick, realtime.roomDeleted);
   registerUploadRoutes(app, context);
   registerOperations(app, db, session.auth, realtime.emit, realtime.emitPrivate);
+  registerCombatDrafts(app, db, session.auth, (roomId) =>
+    realtime.io.to(roomId).emit('combatDraft.changed', { roomId }),
+  );
   registerPresentation(app, db, session.auth, (roomId, revision) =>
     realtime.io.to(roomId).emit('presentation.changed', { roomId, revision }),
   );

@@ -232,7 +232,7 @@ test('棋子移动：三账号与同账号多窗口平滑回放、去重、连�
     await gm.locator('.game-rail').getByRole('button', { name: '角色', exact: true }).click();
     await gm.getByRole('button', { name: '沙盘游侠', exact: true }).click();
     await gm.getByRole('button', { name: '关闭角色', exact: true }).click();
-    await gm.getByLabel('角色名称').fill('尚未保存的移动期间草稿');
+    await gm.getByLabel('角色名称', { exact: true }).fill('尚未保存的移动期间草稿');
     // Two accepted moves while the first is still being presented retarget from the displayed position.
     let current = await db.mapToken.findUniqueOrThrow({ where: { id: token.id } });
     const one = await op(0, 'token.move', {
@@ -260,7 +260,7 @@ test('棋子移动：三账号与同账号多窗口平滑回放、去重、连�
       )
       .toBe(true);
     for (const page of [gm, a, b, reduced]) await expect.poll(() => node(page, token.id)).toEqual({ x: 1100, y: 650 });
-    await expect(gm.getByLabel('角色名称')).toHaveValue('尚未保存的移动期间草稿');
+    await expect(gm.getByLabel('角色名称', { exact: true })).toHaveValue('尚未保存的移动期间草稿');
     // Failed stale writes cannot alter the final position.
     const conflict = await contexts[1].request.post(`${api}/rooms/${room.id}/operations`, {
       data: { id: randomUUID(), type: 'token.move', payload: { id: token.id, version: token.version, x: 0, y: 0 } },

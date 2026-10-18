@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { asyncRoute as wrap, fail } from './http.js';
 import { MAX_UPLOAD_BYTES, sanitizeImage, uploadDir } from './upload.js';
 import { clueSendInput, clueForwardInput, clueFilename } from './private-clue-input.js';
+import { roomMemberName } from '@dnd/shared';
+import { roomActorName } from './room-member-profile.js';
 
 type Notify = (roomId: string, userIds: string[], kind: 'delivered' | 'updated') => void;
 const files = (roomId: string) => join(uploadDir, roomId, 'private-clues');
@@ -133,7 +135,7 @@ export function registerPrivateClues(
           data: {
             roomId,
             senderUserId: userId,
-            senderName: req.user!.username,
+            senderName: await roomActorName(tx, roomId, userId),
             title: input.title,
             bodyMarkdown: input.bodyMarkdown,
             gmNote: input.gmNote,
@@ -270,13 +272,20 @@ export function registerPrivateClues(
         where: { id: { in: c.deliveries.map((d) => d.recipientUserId) } },
         select: { id: true, username: true },
       });
+      const members = await db.roomMember.findMany({
+        where: { roomId, userId: { in: c.deliveries.map((d) => d.recipientUserId) } },
+        include: { user: { select: { username: true } } },
+      });
       res.set('Cache-Control', 'no-store').json({
         ...(await visible(c, true, true)),
         isForwarded: !!c.rootClueId,
         deliveries: c.deliveries.map((d) => ({
           id: d.id,
           recipientUserId: d.recipientUserId,
-          recipientName: users.find((u) => u.id === d.recipientUserId)?.username || '已离开的账号',
+          recipientName: roomMemberName(
+            members.find((m) => m.userId === d.recipientUserId),
+            users.find((u) => u.id === d.recipientUserId)?.username || '已离开的账号',
+          ),
           readAt: d.readAt,
           createdAt: d.createdAt,
         })),
@@ -342,7 +351,7 @@ export function registerPrivateClues(
             senderUserId: d.clue.senderUserId,
             senderName: d.clue.senderName,
             sharedByUserId: userId,
-            sharedByName: req.user!.username,
+            sharedByName: await roomActorName(tx, roomId, userId),
             rootClueId: original!.id,
             title: d.clue.title,
             bodyMarkdown: d.clue.bodyMarkdown,

@@ -1,5 +1,9 @@
+import StateName, { RomanNumeralSelect } from './StateName';
+import DurationInput from './DurationInput';
 import { useState } from 'react';
 import { TAG_DETAILS_MAX, type TagDefinition } from '@dnd/shared';
+import CustomFieldsEditor from '../CustomFieldsEditor';
+import { validateItemFields } from '../item-fields';
 import type { TagProps } from './types';
 import { VisibilitySelect, TagIcon } from './TagIcon';
 import TagMarkdown from './TagMarkdown';
@@ -19,7 +23,10 @@ export default function TagAttachForm({
 }) {
   const [details, setDetails] = useState(definition.templateDescription),
     [visibility, setVisibility] = useState(definition.defaultVisibility),
+    [romanNumeral, setRomanNumeral] = useState(definition.romanNumeral || ''),
     [priority, setPriority] = useState(definition.defaultPriority),
+    [customFields, setCustomFields] = useState(definition.customFields || []),
+    [remainingTurns, setRemainingTurns] = useState<number | null>(definition.defaultDurationTurns ?? null),
     [selected, setSelected] = useState<string[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -28,7 +35,10 @@ export default function TagAttachForm({
     details !== definition.templateDescription ||
     visibility !== definition.defaultVisibility ||
     priority !== definition.defaultPriority ||
-    selected.length > 0;
+    romanNumeral !== (definition.romanNumeral || '') ||
+    selected.length > 0 ||
+    remainingTurns !== (definition.defaultDurationTurns ?? null) ||
+    JSON.stringify(customFields) !== JSON.stringify(definition.customFields || []);
   useDraftProtection(windowId, dirty);
   async function attach() {
     setBusy(true);
@@ -40,6 +50,9 @@ export default function TagAttachForm({
         detailsMarkdown: details,
         visibility,
         priority,
+        romanNumeral,
+        remainingTurns,
+        customFields: validateItemFields(customFields),
         ...(characterId ? { characterId } : { characterIds: selected }),
       });
       onDone(true);
@@ -55,11 +68,13 @@ export default function TagAttachForm({
         <span style={{ color: definition.color }}>
           <TagIcon icon={definition.icon} size={24} />
         </span>
-        <h3>{definition.name}</h3>
+        <h3>
+          <StateName name={definition.name} numeral={romanNumeral} />
+        </h3>
       </div>
       {!characterId && (
         <fieldset className="tag-batch-list">
-          <legend className="label">选择角色（已拥有该标签的角色会跳过）</legend>
+          <legend className="label">选择角色（已拥有该状态的角色会跳过）</legend>
           {p.snap.characters.map((c) => {
             const attached = p.snap.characterTags.some(
               (t) => t.characterId === c.id && t.tagDefinitionId === definition.id,
@@ -81,6 +96,7 @@ export default function TagAttachForm({
           })}
         </fieldset>
       )}
+      <RomanNumeralSelect value={romanNumeral} onChange={setRomanNumeral} disabled={busy} />
       <div className="tag-form-grid">
         <VisibilitySelect value={visibility} onChange={setVisibility} />
         <label>
@@ -117,9 +133,17 @@ export default function TagAttachForm({
           placeholder="填写此角色独立的剧情秘密与 GM 备忘…"
         />
       )}
+      <DurationInput value={remainingTurns} onChange={setRemainingTurns} />
+      <p className="tiny subtle">只在此人物的正式回合结束时减一；本回合中途添加也会在本次结束时扣减。</p>
+      <CustomFieldsEditor
+        fields={customFields}
+        onChange={setCustomFields}
+        disabled={busy}
+        hint="数值词条名称与基础信息一致时自动加成；文字仅作记录。"
+      />
       <p className="tiny subtle">
         {characterId ? '这份备注只属于当前角色。' : '为每个选中角色分别复制一份初稿，之后可独立编辑。'}
-        标签不会改变属性、资源或战斗。
+        移除状态后，对应数值加成随即撤销。
       </p>
       {error && (
         <p role="alert" className="text-red-300 text-sm">

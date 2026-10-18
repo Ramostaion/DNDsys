@@ -356,11 +356,11 @@ test('敏捷对抗声明自动双 D20、四类角色、全员广播、最新数�
     );
     if (page === t.b) expect(phases.every((entry: any) => entry.animation === 'none')).toBe(true);
     else {
-      expect(phases.some((entry: any) => entry.phase === 'visible' && entry.animation === 'combat-notice-arrive')).toBe(
+      expect(phases.some((entry: any) => entry.phase === 'visible' && entry.animation === 'broadcast-arrive')).toBe(
         true,
       );
       const exit = phases.find((entry: any) => entry.phase === 'fading');
-      expect(exit.animation).toBe('combat-notice-depart');
+      expect(exit.animation).toBe('broadcast-depart');
       expect(exit.keyframes.map(String)).toContain('1');
       expect(exit.keyframes.map(String)).toContain('0');
     }
@@ -704,7 +704,7 @@ test('敏捷判定持久快照、广播失败仍提交、私密隔离与 API 重
   expect(missing.data.skippedReason).toContain('缺少敏捷词条');
 });
 
-test('护盾独立资源在所有血条上方显示，GM 编辑增减、属性加成、权限隔离及旧卡持久同步', async ({ table: t }) => {
+test('护盾独立资源在所有血条上方显示，GM 编辑增减、属性加成、权限隔离及旧卡持久同步', async ({ table: t }, info) => {
   test.setTimeout(120_000);
   for (const page of [t.gm, t.a, t.b]) await page.setViewportSize({ width: 1600, height: 1050 });
   let state = await snapshot(t.gmContext, t.room.id);
@@ -798,6 +798,13 @@ test('护盾独立资源在所有血条上方显示，GM 编辑增减、属性�
     ),
   ).toBe(true);
   await expect(t.a.getByLabel('当前护盾原始值')).toHaveCount(0);
+  await t.gm.screenshot({ path: info.outputPath('dossier-gm.png') });
+  await t.a.screenshot({ path: info.outputPath('dossier-player.png') });
+  await t.gm.setViewportSize({ width: 480, height: 800 });
+  await expect(panel).toBeVisible();
+  expect(await panel.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  await t.gm.screenshot({ path: info.outputPath('dossier-narrow.png') });
+  await t.gm.setViewportSize({ width: 1600, height: 1050 });
   await max.getByLabel('护盾上限原始值').fill('40');
   await max.getByRole('button', { name: '设定', exact: true }).click();
   await expect(current.locator('strong.text-amber-300')).toHaveText('12 / 40');
@@ -878,6 +885,7 @@ test('护盾独立资源在所有血条上方显示，GM 编辑增减、属性�
   await openCharacter(t.gm, '角色甲');
   await expect(t.gm.locator('.shield-section strong.text-amber-300').first()).toHaveText('24 / 45');
   await expect(t.gm.getByLabel('当前护盾原始值')).toHaveValue('24');
+  await t.gm.screenshot({ path: info.outputPath('dossier-legacy.png') });
   expect(mine(await snapshot(t.gmContext, t.room.id)).currentHp).toBe(0);
 });
 
@@ -2463,7 +2471,7 @@ test('GM 能力模板库与玩家能力标题区分，按分类新建，共享�
   const library = t.gm.locator('.template-library'),
     editor = t.gm.locator('.template-editor');
   await expect(library.getByRole('heading', { name: '能力模板库', exact: true })).toBeVisible();
-  await expect(t.gm.locator('.window-title')).toContainText('能力模板库');
+  await expect(t.gm.locator('.window').filter({ has: library }).locator('.window-title')).toContainText('能力模板库');
   await expect(t.gm.getByRole('button', { name: '关闭能力模板库', exact: true })).toBeVisible();
   for (const [kind, label] of [
     ['TRAIT', '特性'],
@@ -2499,7 +2507,7 @@ test('GM 能力模板库与玩家能力标题区分，按分类新建，共享�
     await expect(abilities).toContainText('技能实例');
     for (const action of ['新建', '编辑', '删除', '共享', '副本'])
       await expect(abilities.getByRole('button', { name: action, exact: true })).toHaveCount(0);
-    await window.getByRole('button', { name: '最小化能力', exact: true }).click();
+    await window.getByRole('button', { name: '关闭能力', exact: true }).click();
     await expect(page.getByRole('button', { name: '能力', exact: true })).toHaveCount(0);
     await page.locator('.sheet-actions').getByRole('button', { name: '技能', exact: true }).click();
     await expect(window).toBeVisible();
@@ -2608,7 +2616,7 @@ test('右上同行者下方展示角色血量，中文日志可折叠，窗口�
     if (edge.includes('w')) expect(after.x + after.width).toBeCloseTo(before.x + before.width, 0);
     if (edge.includes('n')) expect(after.y + after.height).toBeCloseTo(before.y + before.height, 0);
   }
-  await panel.getByRole('button', { name: '最小化活动日志', exact: true }).click();
+  await panel.getByRole('button', { name: '关闭活动日志', exact: true }).click();
   await expect(t.a.getByRole('button', { name: '活动日志', exact: true })).toHaveCount(0);
   await t.a.locator('.game-rail').getByRole('button', { name: '日志', exact: true }).click();
   await expect(panel).toBeVisible();
@@ -3401,7 +3409,7 @@ test('遭遇由 GM 手动指定行动顺序和轮次，时间线显示操作账�
   );
 });
 
-test('侧边栏功能可重复点击关闭，最小化恢复且草稿保护继续有效', async ({ table: t }) => {
+test('侧边栏功能可重复点击关闭，统一关闭入口且草稿保护继续有效', async ({ table: t }) => {
   for (const page of [t.gm, t.a]) {
     await page.setViewportSize({ width: 1400, height: 1000 });
     const buttons = page.locator('.game-rail .rail-action[aria-pressed]');
@@ -3411,6 +3419,7 @@ test('侧边栏功能可重复点击关闭，最小化恢复且草稿保护继�
       await button.click();
       await expect(button).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('.window:visible')).toHaveCount(1);
+      await expect(page.getByRole('button', { name: /^最小化/ })).toHaveCount(0);
       await button.click();
       await expect(button).toHaveAttribute('aria-pressed', 'false');
       await expect(page.locator('.window')).toHaveCount(0);
@@ -3427,7 +3436,7 @@ test('侧边栏功能可重复点击关闭，最小化恢复且草稿保护继�
     await expect(page.locator('.character-sheet')).toBeVisible();
     await expect(dice).toHaveAttribute('aria-pressed', 'true');
     await closeWindow(page, '关闭人物卡');
-    await page.getByRole('button', { name: '最小化骰子', exact: true }).click();
+    await page.getByRole('button', { name: '关闭骰子', exact: true }).click();
     await expect(dice).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('.window:visible')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '骰子', exact: true })).toHaveCount(1);
@@ -3562,7 +3571,11 @@ test('自定义与旧人物卡均可上传头像，玩家只能改有控制权�
   await post(t.gmContext, `/rooms/${t.room.id}/members/${t.users[1].id}/permissions`, { characterBasics: true });
   await openCharacter(t.a, '角色甲');
   const file = { name: 'avatar.png', mimeType: 'image/png', buffer: await picture };
-  await t.a.getByLabel('上传角色头像').setInputFiles(file);
+  const avatarControl = t.a.getByRole('button', { name: '更换角色头像', exact: true });
+  await avatarControl.focus();
+  const chooser = t.a.waitForEvent('filechooser');
+  await avatarControl.press('Enter');
+  await (await chooser).setFiles(file);
   await expect
     .poll(
       async () => (await snapshot(t.aContext, t.room.id)).characters.find((c: any) => c.id === t.ca.id).avatarUrl || '',
@@ -4487,7 +4500,7 @@ test('双击量尺显示旋转端点，拖动以原点为轴并保持长度，�
   await select(t.a);
   const ownerAngle = await drag(t.a, 60.5);
   await expect.poll(async () => (await saved()).rotation).toBeCloseTo(ownerAngle, 2);
-  await t.a.mouse.click(200, 500);
+  await t.a.locator('.konvajs-content').click({ position: { x: 100, y: 200 } });
   await expect.poll(() => handleCount(t.a)).toBe(0);
   await t.a.reload();
   await select(t.a);

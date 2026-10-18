@@ -15,6 +15,8 @@ import {
   Tags,
   Backpack,
   Mail,
+  ListOrdered,
+  Hourglass,
   type LucideIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,12 +24,14 @@ import { useUI, type WindowType } from '../../store';
 
 const items: { type: WindowType; label: string; icon: LucideIcon; gmOnly?: boolean; playerOnly?: boolean }[] = [
   { type: 'characters', label: '角色', icon: Users },
-  { type: 'tag-library', label: '标签', icon: Tags, gmOnly: true },
+  { type: 'tag-library', label: '状态', icon: Tags, gmOnly: true },
   { type: 'sheet', label: '字段', icon: SlidersHorizontal },
   { type: 'maps', label: '地图', icon: Map },
   { type: 'presentation', label: '导演台', icon: Clapperboard },
   { type: 'private-clues', label: '私密线索', icon: Mail },
   { type: 'combat', label: '战斗', icon: Swords },
+  { type: 'initiative-settings', label: '先手权重配置', icon: ListOrdered, gmOnly: true },
+  { type: 'turn-system', label: '回合系统', icon: Hourglass, gmOnly: true },
   { type: 'dice', label: '骰子', icon: Dices },
   { type: 'items', label: '物品', icon: Boxes, gmOnly: true },
   { type: 'inventory', label: '背包', icon: Backpack, playerOnly: true },
@@ -43,7 +47,7 @@ export default function RoomSidebar({ isGM, unreadCount }: { isGM: boolean; unre
     toggle = useUI((s) => s.toggle);
   const visible = useUI((s) =>
     s.windows
-      .filter((w) => !w.minimized && w.entityId === undefined)
+      .filter((w) => !w.motion && w.entityId === undefined)
       .map((w) => w.type)
       .join(','),
   );

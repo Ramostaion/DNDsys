@@ -1,0 +1,54 @@
+/* The 36px rune arrow uses its tip at (3, 3); native cursors keep operation states clear. */
+.game-shell {
+  --room-cursor: url('/cursors/rune-arrow.svg') 3 3, default;
+  cursor: var(--room-cursor);
+}
+
+.game-shell
+  :is(
+    button,
+    a[href],
+    summary,
+    label,
+    select,
+    [role='button'],
+    [role='tab'],
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='range'],
+    input[type='color'],
+    input[type='file']
+  ):not(
+    :disabled,
+    .board-tools-heading,
+    .cursor-grab,
+    .cursor-grabbing,
+    .cursor-move,
+    .agility-bonus-trigger,
+    [draggable='true']
+  ) {
+  cursor: var(--room-cursor);
+}
+
+.game-shell
+  :is(
+    textarea,
+    [contenteditable='true'],
+    input:not(
+      [type='checkbox'],
+      [type='radio'],
+      [type='range'],
+      [type='color'],
+      [type='button'],
+      [type='submit'],
+      [type='reset'],
+      [type='file'],
+      [type='image']
+    )
+  ) {
+  cursor: text;
+}
+
+.game-shell :is(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+}

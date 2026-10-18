@@ -10,6 +10,7 @@ import { draftKey, emptyDraft, readDraft, writeDraft, type Draft } from './draft
 import type { PresentationAsset } from '../presentation/usePresentation';
 import '../../character-tags.css';
 import './private-clues.css';
+import { roomMemberName } from '@dnd/shared';
 
 type Props = { snap: Snapshot; me: any; isGM: boolean };
 const time = (date: string | null | undefined) =>
@@ -72,7 +73,7 @@ function RecipientPicker({
       <div className="clue-recipient-grid">
         {members
           .filter((m) =>
-            `${m.user.username} ${p.snap.characters
+            `${roomMemberName(m)} ${m.user.username} ${p.snap.characters
               .filter((c) => c.ownerId === m.userId)
               .map((c) => c.name)
               .join(' ')}`
@@ -89,10 +90,10 @@ function RecipientPicker({
                 }
               />
               <span className="clue-recipient-avatar">
-                {m.user.avatarUrl ? <img src={m.user.avatarUrl} alt="" /> : m.user.username.slice(0, 1)}
+                {m.user.avatarUrl ? <img src={m.user.avatarUrl} alt="" /> : roomMemberName(m).slice(0, 1)}
               </span>
               <span className="min-w-0">
-                <strong>{m.user.username}</strong>
+                <strong title={`账号：${m.user.username}`}>{roomMemberName(m)}</strong>
                 <small>
                   {p.snap.characters
                     .filter((c) => c.ownerId === m.userId)
@@ -107,7 +108,7 @@ function RecipientPicker({
         {value.length
           ? `发送给 ${value.length} 人：${members
               .filter((m) => value.includes(m.userId))
-              .map((m) => m.user.username)
+              .map((m) => roomMemberName(m))
               .join('、')}`
           : '请选择至少一名接收人'}
       </p>
@@ -665,7 +666,14 @@ function Inbox({ p }: { p: Props }) {
   );
   return (
     <div className="clue-inbox space-y-3">
-      <p className="tiny subtle">这是 {p.me.username} 的私人收件箱；收到通知不会自动标为已读。</p>
+      <p className="tiny subtle">
+        这是{' '}
+        {roomMemberName(
+          p.snap.members.find((m) => m.userId === p.me.id),
+          p.me.username,
+        )}{' '}
+        的私人收件箱；收到通知不会自动标为已读。
+      </p>
       <div className="clue-filters">
         <input
           aria-label="搜索私人线索"
@@ -995,7 +1003,7 @@ export function ClueReader({ p, id, sent = false }: { p: Props; id?: string; sen
                     return;
                   const previous = useUI.getState().windows.find((w) => w.type === 'private-clues');
                   if (previous) {
-                    useUI.getState().close(previous.id);
+                    useUI.getState().close(previous.id, { immediate: true });
                     if (useUI.getState().windows.some((w) => w.id === previous.id)) return;
                   }
                   if (
@@ -1043,7 +1051,7 @@ export function ClueImage({ p, id, windowId }: { p: Props; id?: string; windowId
         e.key === 'Escape' &&
         useUI
           .getState()
-          .windows.filter((w) => !w.minimized)
+          .windows.filter((w) => !w.motion)
           .sort((a, b) => b.z - a.z)[0]?.id === windowId
       ) {
         e.preventDefault();

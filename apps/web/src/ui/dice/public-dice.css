@@ -1,18 +1,137 @@
-.public-dice-banner{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:min(560px,calc(100% - 28px));z-index:10000;pointer-events:none!important;user-select:none;padding:9px 16px;border:1px solid #be965b88;border-radius:15px;background:linear-gradient(135deg,#1a2530ef,#10151cec);box-shadow:0 8px 30px #0006,inset 0 0 22px #bc874512;color:#f6e6c9;animation:public-dice-enter .18s ease-out both}
-.public-dice-banner *{pointer-events:none!important}
-.public-dice-heading{text-align:center;font-weight:600;font-size:14px;overflow-wrap:anywhere;color:#f5d59e}
-.public-dice-content{display:flex;align-items:center;gap:14px;margin-top:7px;min-height:50px}
-.public-dice-text{flex:1;min-width:0;font-size:12px;overflow-wrap:anywhere}
-.public-dice-calculation{color:#bcad95;font-size:11px;margin-top:5px;max-height:40px;overflow:hidden}
-.public-dice-final{flex-shrink:0;text-align:center;min-width:65px}
-.public-dice-final small{display:block;color:#c3b190;font-size:10px}
-.public-dice-final strong{display:block;font:700 34px Georgia,serif;color:#ffda92}
-.public-dice-banner.is-result .public-dice-final strong{animation:public-dice-reveal .25s ease-out both}
-.public-dice-banner.is-fading{animation:public-dice-exit .35s ease-in both}
-.game-shell .public-dice-banner~.combat-result-banner{top:240px}
-@keyframes public-dice-enter{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
-@keyframes public-dice-exit{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-6px)}}
-@keyframes public-dice-reveal{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
-@media(prefers-reduced-motion:reduce){.public-dice-banner,.public-dice-banner *{animation:none!important}}
-@media(max-width:1100px){.public-dice-banner{width:min(360px,calc(100% - 16px));padding:9px 12px}.public-dice-heading{font-size:12px}.public-dice-content{gap:8px}.public-dice-text{font-size:11px}.public-dice-final{min-width:50px}.public-dice-final strong{font-size:28px}}
-@media(max-width:700px){.public-dice-banner{top:8px;padding:10px;width:calc(100% - 16px)}}
+.public-dice-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 28px));
+  z-index: 10000;
+  pointer-events: none !important;
+  user-select: none;
+  padding: 9px 16px;
+  border: 1px solid #be965b88;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #1a2530ef, #10151cec);
+  box-shadow:
+    0 8px 30px #0006,
+    inset 0 0 22px #bc874512;
+  color: #f6e6c9;
+  animation: public-dice-enter 0.18s ease-out both;
+}
+.public-dice-banner * {
+  pointer-events: none !important;
+}
+.public-dice-heading {
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  color: #f5d59e;
+}
+.public-dice-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 7px;
+  min-height: 50px;
+}
+.public-dice-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.public-dice-calculation {
+  color: #bcad95;
+  font-size: 11px;
+  margin-top: 5px;
+  max-height: 40px;
+  overflow: hidden;
+}
+.public-dice-final {
+  flex-shrink: 0;
+  text-align: center;
+  min-width: 65px;
+}
+.public-dice-final small {
+  display: block;
+  color: #c3b190;
+  font-size: 10px;
+}
+.public-dice-final strong {
+  display: block;
+  font:
+    700 34px Georgia,
+    serif;
+  color: #ffda92;
+}
+.public-dice-banner.is-result .public-dice-final strong {
+  animation: public-dice-reveal 0.25s ease-out both;
+}
+.public-dice-banner.is-fading {
+  animation: public-dice-exit 0.35s ease-in both;
+}
+
+@keyframes public-dice-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@keyframes public-dice-exit {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+@keyframes public-dice-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-dice-banner,
+  .public-dice-banner * {
+    animation: none !important;
+  }
+}
+@media (max-width: 1100px) {
+  .public-dice-banner {
+    width: min(360px, calc(100% - 16px));
+    padding: 9px 12px;
+  }
+  .public-dice-heading {
+    font-size: 12px;
+  }
+  .public-dice-content {
+    gap: 8px;
+  }
+  .public-dice-text {
+    font-size: 11px;
+  }
+  .public-dice-final {
+    min-width: 50px;
+  }
+  .public-dice-final strong {
+    font-size: 28px;
+  }
+}
+@media (max-width: 700px) {
+  .public-dice-banner {
+    top: 8px;
+    padding: 10px;
+    width: calc(100% - 16px);
+  }
+}

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Circle, Group, Line, Rect, Text, Wedge } from 'react-konva';
 import type Konva from 'konva';
+import { coneRulerBounds } from './ruler-bounds';
 
 export default function Ruler({
   drawing,
@@ -29,7 +30,8 @@ export default function Ruler({
 }) {
   const data = drawing.data || {},
     length = Number(data.length) || 100,
-    shape = data.shape || 'LINE';
+    shape = data.shape || 'LINE',
+    coneAngle = Number(data.angle) || 60;
   const shapeGroup = useRef<Konva.Group>(null);
   const [bounds, setBounds] = useState({ x: 0, y: 0, width: length, height: 0 });
   const [deleting, setDeleting] = useState(false);
@@ -50,8 +52,12 @@ export default function Ruler({
   serverAngle.current = Number(data.rotation) || 0;
   useLayoutEffect(() => {
     if (selected && shapeGroup.current && group.current)
-      setBounds(shapeGroup.current.getClientRect({ relativeTo: group.current }));
-  }, [selected, rotation, shape, length, data.angle, scale]);
+      setBounds(
+        shape === 'CONE'
+          ? coneRulerBounds(length, coneAngle, rotation)
+          : shapeGroup.current.getClientRect({ relativeTo: group.current }),
+      );
+  }, [selected, rotation, shape, length, coneAngle, scale]);
   useEffect(() => {
     if (!dragging.current && !pending.current && !saving.current) {
       angle.current = serverAngle.current;
@@ -186,19 +192,8 @@ export default function Ruler({
         )}
         {shape === 'CONE' && (
           <>
-            <Wedge
-              radius={length}
-              angle={Number(data.angle) || 60}
-              rotation={-(Number(data.angle) || 60) / 2}
-              fill={`${color}33`}
-              listening={false}
-            />
-            <Wedge
-              radius={length}
-              angle={Number(data.angle) || 60}
-              rotation={-(Number(data.angle) || 60) / 2}
-              {...common}
-            />
+            <Wedge radius={length} angle={coneAngle} rotation={-coneAngle / 2} fill={`${color}33`} listening={false} />
+            <Wedge radius={length} angle={coneAngle} rotation={-coneAngle / 2} {...common} />
           </>
         )}
       </Group>
@@ -253,7 +248,7 @@ export default function Ruler({
             onMouseEnter={(event) => {
               const container = event.target.getStage()?.container();
               if (container) {
-                container.style.cursor = 'pointer';
+                container.style.cursor = 'var(--room-cursor, pointer)';
                 container.title = '删除量尺';
               }
             }}

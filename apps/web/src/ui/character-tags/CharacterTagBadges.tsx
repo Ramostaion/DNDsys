@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { Tags } from 'lucide-react';
-import { sortCharacterTags } from '@dnd/shared';
+import { sortCharacterTags, stateDisplayName } from '@dnd/shared';
 import type { Snapshot } from '../../api';
 import { useUI } from '../../store';
 import { TagIcon } from './TagIcon';
+import { useHoverPreview } from '../HoverCard';
+import { StateHoverCard } from './StateDetailsContent';
 export default function CharacterTagBadges({
   snap,
   characterId,
@@ -16,7 +18,9 @@ export default function CharacterTagBadges({
   compact?: boolean;
 }) {
   const open = useUI((s) => s.open);
+  const hover = useHoverPreview();
   const tags = sortCharacterTags((snap.characterTags || []).filter((tag) => tag.characterId === characterId));
+  const preview = tags.find((tag) => tag.id === hover.preview?.id);
   return (
     <div className={`tag-avatar-wrap ${compact ? 'compact' : ''}`}>
       {children}
@@ -26,8 +30,11 @@ export default function CharacterTagBadges({
             type="button"
             key={tag.id}
             className={`tag-avatar-badge anchor-${i}`}
-            title={tag.definition.name}
-            aria-label={`标签：${tag.definition.name}`}
+            aria-label={`状态：${stateDisplayName(tag.definition.name, tag.romanNumeral)}`}
+            onPointerEnter={(e) => hover.show(tag.id, e.currentTarget)}
+            onPointerLeave={hover.leave}
+            onFocus={(e) => hover.show(tag.id, e.currentTarget)}
+            onBlur={hover.leave}
             style={{ color: tag.definition.color, borderColor: tag.definition.color }}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
@@ -37,21 +44,19 @@ export default function CharacterTagBadges({
             }}
             onClick={(e) => {
               e.stopPropagation();
+              hover.close();
               open('tag-detail', tag.id);
             }}
           >
             <TagIcon icon={tag.definition.icon} size={compact ? 11 : 14} />
-            <span className="tag-badge-tooltip" aria-hidden="true">
-              {tag.definition.name}
-            </span>
           </button>
         ))}
         {tags.length > 3 && (
           <button
             type="button"
             className="tag-avatar-badge tag-overflow"
-            title="查看全部可见标签"
-            aria-label={`查看全部 ${tags.length} 个可见标签`}
+            title="查看全部可见状态"
+            aria-label={`查看全部 ${tags.length} 个可见状态`}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -63,6 +68,11 @@ export default function CharacterTagBadges({
           </button>
         )}
       </div>
+      <StateHoverCard
+        hover={hover}
+        tag={preview}
+        characterName={snap.characters.find((c) => c.id === characterId)?.name}
+      />
     </div>
   );
 }
@@ -71,7 +81,7 @@ export function CharacterTagManageButton({ characterId, isGM }: { characterId: s
   return (
     <button className="btn" onClick={() => open('character-tags', characterId)}>
       <Tags size={15} />
-      {isGM ? '管理标签' : '查看标签'}
+      {isGM ? '管理状态' : '查看状态'}
     </button>
   );
 }

@@ -1,0 +1,40 @@
+.character-ability-tooltip {
+  z-index: 12000;
+  width: 350px;
+  max-width: calc(100vw - 24px);
+  max-height: min(440px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #a5854c;
+  border-radius: 10px;
+  background: #111a22f7;
+  box-shadow: 0 12px 35px #0009;
+  color: #eadfc9;
+  overscroll-behavior: contain;
+}
+.character-ability-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.character-ability-details header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+.character-ability-details header h3 {
+  width: 100%;
+  font-size: 17px;
+  font-weight: 600;
+  color: #e2c785;
+}
+.character-ability-details p {
+  margin: 0;
+}
+.character-skills [data-ability-preview]:focus-visible {
+  outline: 1px solid #d4af57;
+  outline-offset: 3px;
+}

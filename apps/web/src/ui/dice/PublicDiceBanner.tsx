@@ -4,6 +4,7 @@ import { rolledDice } from './dice-geometry';
 import type { DiceCue } from './useRoomDice';
 import DiceStage from './DiceStage';
 import './public-dice.css';
+import { naturalD20 } from '../broadcast-layout';
 
 /** A live event only. Never mounted from the saved roll history. */
 export default function PublicDiceBanner({ cue }: { cue: DiceCue | null }) {
@@ -37,9 +38,10 @@ function DicePerformance({ cue }: { cue: DiceCue }) {
   }, [cue]);
   if (phase === 'hidden') return null;
   const dice = rolledDice(cue.roll.details);
+  const natural = naturalD20(cue.roll.details);
   return (
     <aside
-      className={`public-dice-banner is-${phase}`}
+      className={`public-dice-banner is-${phase} ${phase !== 'rolling' && natural ? (natural === 20 ? 'has-natural-twenty' : 'has-natural-one') : ''}`}
       data-roll-id={cue.roll.id}
       data-phase={phase}
       role="status"
@@ -47,7 +49,10 @@ function DicePerformance({ cue }: { cue: DiceCue }) {
       aria-atomic="true"
       aria-label="公开掷骰演出"
     >
-      <div className="public-dice-heading">{diceActor(cue.roll)} 掷出了骰子！</div>
+      <div className="public-dice-heading">
+        {diceActor(cue.roll)} 掷出了骰子！
+        {phase !== 'rolling' && natural && <span className="public-dice-natural">自然 {natural}</span>}
+      </div>
       <div className="public-dice-content">
         <DiceStage roll={cue.roll} expression={cue.roll.expression} pending={false} animated reveal compact />
         <div className="public-dice-text">

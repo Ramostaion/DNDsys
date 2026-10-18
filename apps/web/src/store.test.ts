@@ -26,19 +26,6 @@ describe('浮窗管理器', () => {
     state.toggle('characters');
     expect(useUI.getState().windows).toHaveLength(3);
   });
-  it('切换最小化窗口会恢复位置尺寸，之后再次切换才关闭', () => {
-    const state = useUI.getState();
-    state.toggle('dice');
-    const win = useUI.getState().windows[0];
-    state.move(win.id, 240, 180);
-    state.resize(win.id, 600, 500);
-    state.minimize(win.id);
-    state.toggle('dice');
-    expect(useUI.getState().windows).toHaveLength(1);
-    expect(useUI.getState().windows[0]).toMatchObject({ id: win.id, minimized: false, x: 240, y: 180, w: 600, h: 500 });
-    state.toggle('dice');
-    expect(useUI.getState().windows).toHaveLength(0);
-  });
   it('再次切换仍遵守草稿关闭保护，并精确匹配独立实体窗口', () => {
     const state = useUI.getState();
     state.toggle('tag-library');
@@ -54,17 +41,15 @@ describe('浮窗管理器', () => {
     state.toggle('tag-detail', 'first');
     expect(useUI.getState().windows.map((w) => w.entityId)).toEqual(['second']);
   });
-  it('打开、移动、缩放、最小化、恢复和关闭', () => {
+  it('打开、移动、缩放、聚焦和关闭', () => {
     const state = useUI.getState();
     state.open('characters');
     const win = useUI.getState().windows.at(-1)!;
     state.move(win.id, 200, 150);
     state.resize(win.id, 600, 500);
     expect(useUI.getState().windows.find((w) => w.id === win.id)).toMatchObject({ x: 200, y: 150, w: 600, h: 500 });
-    state.minimize(win.id);
-    expect(useUI.getState().windows.find((w) => w.id === win.id)?.minimized).toBe(true);
     state.focus(win.id);
-    expect(useUI.getState().windows.find((w) => w.id === win.id)?.minimized).toBe(false);
+    expect(useUI.getState().windows.find((w) => w.id === win.id)?.z).toBe(useUI.getState().topZ);
     state.close(win.id);
     expect(useUI.getState().windows.find((w) => w.id === win.id)).toBeUndefined();
   });
@@ -75,7 +60,6 @@ describe('浮窗管理器', () => {
     state.setCloseGuard(win.id, () => false);
     state.close(win.id);
     expect(useUI.getState().windows.find((w) => w.id === win.id)).toBeDefined();
-    state.minimize(win.id);
     state.focus(win.id);
     expect(useUI.getState().closeGuards[win.id]).toBeDefined();
     state.setCloseGuard(win.id, () => true);

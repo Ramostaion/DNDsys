@@ -3,6 +3,7 @@ import { refreshCharacter } from '../character-values.js';
 import { memberCan } from '../permissions.js';
 import { fail as bad } from '../http.js';
 import { randomUUID } from 'node:crypto';
+import { customFieldsInput } from '../custom-fields.js';
 import { json, str, required, characterIn, editable, gm, version, modifierData } from './helpers.js';
 import type { OperationContext } from './context.js';
 
@@ -21,7 +22,7 @@ export async function templateOperation(context: OperationContext) {
           name: required(p.name, '模板名称'),
           description: str(p.description).slice(0, 5000),
           iconUrl: p.iconUrl ? str(p.iconUrl) : null,
-          data: json(modifierData(p.data, room)),
+          data: json(templateData(p.data)),
         },
       });
       break;
@@ -37,7 +38,7 @@ export async function templateOperation(context: OperationContext) {
         if (key in patch)
           update[key] =
             key === 'data'
-              ? json(modifierData(patch[key], room))
+              ? json(templateData(patch[key]))
               : key === 'name'
                 ? required(patch.name, '模板名称')
                 : key === 'description'
@@ -59,7 +60,7 @@ export async function templateOperation(context: OperationContext) {
                 description: data.description,
                 ...object(data.data),
                 shared: true,
-                ...(typeof i.enabled === 'boolean' ? { enabled: i.enabled } : {}),
+                enabled: i.enabled !== false,
               }
             : i,
         );
@@ -99,6 +100,7 @@ export async function templateOperation(context: OperationContext) {
         name: template!.name,
         description: template!.description,
         ...object(template!.data),
+        enabled: true,
         shared: p.shared === true,
       };
       data = await tx.character.update({
@@ -109,7 +111,10 @@ export async function templateOperation(context: OperationContext) {
       break;
     }
     case 'template.enable': {
-      if (!memberCan(room, member!, 'templateInstall') || !memberCan(room, member!, 'characterValues'))
+      if (
+        p.field !== 'traits' &&
+        (!memberCan(room, member!, 'templateInstall') || !memberCan(room, member!, 'characterValues'))
+      )
         bad(403, '本房间由 GM 管理能力和状态');
       const c = await characterIn(tx, roomId, required(p.characterId, '角色 ID'));
       editable(member!, c, userId);
@@ -164,4 +169,10 @@ export async function templateOperation(context: OperationContext) {
       bad(400, '未知操作类型');
   }
   return data;
+
+  function templateData(value: unknown) {
+    const data = modifierData(value, room);
+    if ('customFields' in data) data.customFields = customFieldsInput.parse(data.customFields);
+    return data;
+  }
 }

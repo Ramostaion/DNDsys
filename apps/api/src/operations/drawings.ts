@@ -5,6 +5,7 @@ import { json, str, num, required, mapIn } from './helpers.js';
 import type { OperationContext } from './context.js';
 import { z } from 'zod';
 import { recordDrawingEdit, replayDrawingEdit } from './drawing-history.js';
+import { roomActorName } from '../room-member-profile.js';
 
 export async function drawingOperation(context: OperationContext) {
   const { tx, member, rules, roomId, userId, p } = context;
@@ -59,10 +60,10 @@ export async function drawingOperation(context: OperationContext) {
             where: { roomId, kind: 'RULER' },
             orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           }),
-          tx.user.findUniqueOrThrow({ where: { id: userId }, select: { username: true } }),
+          roomActorName(tx, roomId, userId),
         ]);
         drawingData.color = rulerAuthorColors(members, drawings).get(userId);
-        drawingData.authorName = author.username;
+        drawingData.authorName = author;
       } else if (['STROKE', 'ERASER'].includes(kind)) {
         const points = array(drawingData.points);
         if (
