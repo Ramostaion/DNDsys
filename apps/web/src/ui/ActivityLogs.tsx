@@ -1,6 +1,12 @@
 import type { Snapshot } from '../api';
 import { roomMemberName } from '@dnd/shared';
 const labels: Record<string, string> = {
+  'npcDirectory.create': '新建 NPC 目录',
+  'npcDirectory.rename': '重命名 NPC 目录',
+  'npcDirectory.move': '移动 NPC 目录',
+  'npcDirectory.sort': '调整 NPC 目录顺序',
+  'npcDirectory.delete': '删除 NPC 目录（保留角色）',
+  'npcDirectory.assign': '移动 NPC 分类',
   'initiative.character': '保存人物先手权重',
   'initiative.preset.save': '保存先手模板',
   'initiative.preset.select': '选择全局先手模板',
@@ -65,6 +71,12 @@ const labels: Record<string, string> = {
   'drawing.add': '添加地图绘画或量尺',
   'drawing.undo': '撤回地图绘画',
   'drawing.erase': '擦除完整笔画',
+  'audio.play': '播放剧情背景音',
+  'audio.pause': '暂停剧情背景音',
+  'audio.resume': '继续剧情背景音',
+  'audio.stop': '停止剧情背景音',
+  'audio.seek': '调整背景音进度',
+  'audio.settings': '调整背景音设置',
   'drawing.history.undo': '撤销地图绘画或擦除',
   'drawing.history.redo': '重做地图绘画或擦除',
   'drawing.update': '调整地图量尺',

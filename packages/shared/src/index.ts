@@ -218,3 +218,4 @@ export * from './inventory-capacity.js';
 export * from './combat-draft.js';
 export * from './initiative.js';
 export * from './turn-system.js';
+export * from './room-audio.js';

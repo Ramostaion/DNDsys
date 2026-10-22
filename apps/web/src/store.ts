@@ -72,38 +72,48 @@ export const useUI = create<UI>((set, get) => ({
     const n = get().windows.length;
     const tagWindow = type.includes('tag');
     const turnWindow = ['initiative-settings', 'turn-system'].includes(type);
-    const w = turnWindow
-      ? 730
-      : type === 'clue-image'
+    const w =
+      type === 'presentation'
+        ? 860
+        : type === 'characters'
+          ? 780
+          : turnWindow
+            ? 730
+            : type === 'clue-image'
+              ? 760
+              : type === 'private-clues'
+                ? 660
+                : ['clue-reader', 'clue-sent'].includes(type)
+                  ? 620
+                  : type === 'character'
+                    ? 660
+                    : tagWindow
+                      ? 640
+                      : ['quests', 'maps', 'item', 'items', 'inventory', 'templates'].includes(type)
+                        ? 580
+                        : 520;
+    const h =
+      type === 'presentation'
         ? 760
-        : type === 'private-clues'
-          ? 660
-          : ['clue-reader', 'clue-sent'].includes(type)
-            ? 620
-            : type === 'character'
-              ? 660
-              : tagWindow
-                ? 640
-                : ['quests', 'maps', 'item', 'items', 'inventory', 'templates'].includes(type)
-                  ? 580
-                  : 520;
-    const h = turnWindow
-      ? 680
-      : ['private-clues', 'clue-reader', 'clue-sent', 'clue-image'].includes(type)
-        ? 650
-        : type === 'item' || type === 'templates'
+        : type === 'characters'
           ? 640
-          : type === 'character' || tagWindow
-            ? 620
-            : type === 'inventory'
-              ? 600
-              : type === 'items'
-                ? 560
-                : type === 'dice'
-                  ? 570
-                  : type === 'quests' || type === 'maps'
-                    ? 540
-                    : 480;
+          : turnWindow
+            ? 680
+            : ['private-clues', 'clue-reader', 'clue-sent', 'clue-image'].includes(type)
+              ? 650
+              : type === 'item' || type === 'templates'
+                ? 640
+                : type === 'character' || tagWindow
+                  ? 620
+                  : type === 'inventory'
+                    ? 600
+                    : type === 'items'
+                      ? 560
+                      : type === 'dice'
+                        ? 570
+                        : type === 'quests' || type === 'maps'
+                          ? 540
+                          : 480;
     const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth,
       viewportHeight = typeof window === 'undefined' ? 800 : window.innerHeight;
     let x = 0,

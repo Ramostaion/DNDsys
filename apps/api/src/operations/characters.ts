@@ -28,6 +28,7 @@ import {
   sheetFieldSchema,
   sheetFields,
 } from './helpers.js';
+import { assignNewNpc, clearNpcClassification } from '../npc-directory.js';
 import type { OperationContext } from './context.js';
 
 export async function characterOperation(context: OperationContext) {
@@ -53,6 +54,7 @@ export async function characterOperation(context: OperationContext) {
           attackProfiles: json(room.sheetMode ? [] : [DEFAULT_ATTACK_PROFILE]),
         },
       });
+      if (isNpc) await assignNewNpc(tx, roomId, c.id, p.npcFolderId);
       await refreshCharacter(tx, c.id, rules);
       data = await tx.character.findUniqueOrThrow({ where: { id: c.id } });
       break;
@@ -373,6 +375,7 @@ export async function characterOperation(context: OperationContext) {
         changes.level = Math.max(1, Math.floor(num(patch.level)));
       }
       if ('name' in changes) changes.name = required(changes.name, '角色名');
+      if ('isNpc' in changes && changes.isNpc !== c.isNpc) await clearNpcClassification(tx, roomId, c.id);
       const updated = await tx.character.update({
         where: { id: c.id },
         data: { ...changes, version: { increment: 1 } },
@@ -384,6 +387,7 @@ export async function characterOperation(context: OperationContext) {
     case 'character.delete': {
       gm(member!);
       const c = await characterIn(tx, roomId, required(p.id, '角色 ID'));
+      await clearNpcClassification(tx, roomId, c.id);
       await tx.character.delete({ where: { id: c.id } });
       data = { id: c.id };
       break;

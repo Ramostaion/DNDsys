@@ -46,6 +46,9 @@ model Room {
   members RoomMember[]
   publicDiceAvailableAt DateTime?
   characters Character[]
+  npcDirectory NpcDirectoryState?
+  npcFolders NpcFolder[]
+  npcClassifications NpcClassification[]
   maps Map[]
   items ItemDefinition[]
   templates Template[]
@@ -60,6 +63,7 @@ model Room {
   combatDrafts CombatDraft[]
   trades TradeRequest[]
   presentationAssets PresentationAsset[]
+  audioTracks RoomAudioTrack[]
   presentationSession PresentationSession?
   presentationGroups PresentationGroup[]
   presentationCues PresentationCue[]
@@ -143,6 +147,7 @@ model RoomMember {
   @@index([userId])
 }
 model Character {
+  npcClassification NpcClassification?
   id String @id @default(cuid())
   roomId String
   room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
@@ -181,6 +186,36 @@ model Character {
   @@unique([id,roomId])
   @@index([roomId])
   @@index([ownerId])
+}
+
+model NpcDirectoryState {
+  roomId String @id
+  room Room @relation(fields:[roomId], references:[id], onDelete:Cascade)
+  version Int @default(0)
+}
+
+model NpcFolder {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId], references:[id], onDelete:Cascade)
+  parentId String?
+  parent NpcFolder? @relation("NpcFolderChildren", fields:[parentId], references:[id], onDelete:Restrict)
+  children NpcFolder[] @relation("NpcFolderChildren")
+  name String
+  position Int @default(0)
+  classifications NpcClassification[]
+  @@unique([roomId,parentId,name])
+  @@index([roomId,parentId,position])
+}
+
+model NpcClassification {
+  characterId String @id
+  character Character @relation(fields:[characterId], references:[id], onDelete:Cascade)
+  roomId String
+  room Room @relation(fields:[roomId], references:[id], onDelete:Cascade)
+  folderId String
+  folder NpcFolder @relation(fields:[folderId], references:[id], onDelete:Restrict)
+  @@index([roomId,folderId])
 }
 model Map {
   id String @id @default(cuid())
@@ -484,8 +519,23 @@ model PresentationSession {
   requestedMode String @default("floating")
   allowHistory Boolean @default(false)
   revision Int @default(0)
+  audioRevision Int @default(0)
+  audio Json @default("{}")
   updatedBy String?
   updatedAt DateTime @updatedAt
+}
+
+model RoomAudioTrack {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)
+  title String
+  storageName String
+  mimeType String
+  bytes Int
+  duration Float?
+  createdAt DateTime @default(now())
+  @@index([roomId,createdAt])
 }
 
 model PresentationGroup {
@@ -501,6 +551,7 @@ model PresentationGroup {
 }
 
 model PresentationCue {
+  audioCue Json @default("{}")
   id String @id @default(cuid())
   roomId String
   room Room @relation(fields:[roomId],references:[id],onDelete:Cascade)

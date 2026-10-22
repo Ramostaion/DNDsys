@@ -29,15 +29,27 @@ export function registerOperations(
         .object({ id: z.string(), type: z.string(), payload: z.record(z.string(), z.any()).default({}) })
         .parse(req.body);
       const locked =
-        ['dice.roll', 'combat.record'].includes(input.type) ||
-        ['drawing.', 'turn.', 'initiative.', 'characterTag.', 'tagDefinition.'].some((prefix) =>
+        [
+          'dice.roll',
+          'combat.record',
+          'character.create',
+          'character.update',
+          'character.delete',
+          'character.copy',
+        ].includes(input.type) ||
+        ['drawing.', 'turn.', 'initiative.', 'characterTag.', 'tagDefinition.', 'npcDirectory.'].some((prefix) =>
           input.type.startsWith(prefix),
         );
       const opId = requestId(input.id),
         p = input.payload;
       const member = await db.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } });
       if (!member) bad(403, '你不是该房间成员');
-      if (input.type.startsWith('turn.') || input.type.startsWith('initiative.')) gm(member!);
+      if (
+        input.type.startsWith('turn.') ||
+        input.type.startsWith('initiative.') ||
+        input.type.startsWith('npcDirectory.')
+      )
+        gm(member!);
       const room = await db.room.findUniqueOrThrow({ where: { id: roomId } }),
         rules = rulesOf(room.rules);
       const result = await db.$transaction(
@@ -47,16 +59,21 @@ export function registerOperations(
           if (locked) {
             // A mutex without blocking unrelated foreign-key inserts into this room.
             if (
-              ['turn.', 'initiative.', 'characterTag.', 'tagDefinition.'].some((prefix) =>
+              input.type.startsWith('character.') ||
+              ['turn.', 'initiative.', 'characterTag.', 'tagDefinition.', 'npcDirectory.'].some((prefix) =>
                 input.type.startsWith(prefix),
               )
             )
               await tx.$executeRaw`SELECT id FROM "Room" WHERE id = ${roomId} FOR NO KEY UPDATE`;
             else await tx.$executeRaw`SELECT id FROM "Room" WHERE id = ${roomId} FOR UPDATE`;
           }
-          if (input.type.startsWith('turn.') || input.type.startsWith('initiative.')) {
+          if (
+            input.type.startsWith('turn.') ||
+            input.type.startsWith('initiative.') ||
+            input.type.startsWith('npcDirectory.')
+          ) {
             const currentMember = await tx.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } });
-            if (!currentMember || currentMember.role !== 'GM') bad(403, '仅主持人可以管理回合与先手');
+            if (!currentMember || currentMember.role !== 'GM') bad(403, '仅主持人可以执行此管理操作');
           }
           const previous = await tx.operationReceipt.findUnique({ where: { id: opId } });
           if (previous) {
@@ -122,7 +139,7 @@ export function registerOperations(
           return { data, duplicate: false };
         },
         {
-          isolationLevel: locked ? 'ReadCommitted' : 'Serializable',
+          isolationLevel: locked && !input.type.startsWith('character.') ? 'ReadCommitted' : 'Serializable',
           maxWait: 15000,
           timeout: 10000,
         },
@@ -197,6 +214,7 @@ export function registerOperations(
             cooldownUntil: result.data.cooldownUntil,
             serverNow: Date.now(),
           });
+        else if (input.type.startsWith('npcDirectory.')) emitPrivate(roomId, 'npcDirectory.changed', notice, userId);
         else emit(roomId, input.type, notice);
       }
       let response = result.data;

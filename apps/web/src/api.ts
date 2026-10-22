@@ -17,6 +17,11 @@ export const op = (roomId: string, type: string, payload: Record<string, unknown
   post(`/rooms/${roomId}/operations`, { id: operationId, type, payload });
 import type { CharacterTag, TagDefinition } from '@dnd/shared';
 export type Snapshot = {
+  npcDirectory?: {
+    revision: number;
+    folders: { id: string; parentId: string | null; name: string; position: number }[];
+    classifications: { characterId: string; folderId: string }[];
+  };
   room: any;
   members: any[];
   characters: any[];

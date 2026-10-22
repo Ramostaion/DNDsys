@@ -1,0 +1,179 @@
+.npc-manager {
+  container-type: inline-size;
+  min-width: 0;
+}
+.npc-manager-heading,
+.npc-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.npc-manager nav {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  color: #e3c684;
+}
+.npc-browser {
+  display: grid;
+  grid-template-columns: minmax(135px, 180px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.npc-browser.is-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.npc-tree {
+  background: #101820;
+  border: 1px solid #92713c70;
+  padding: 8px;
+  border-radius: 9px;
+  max-height: 540px;
+  overflow: auto;
+}
+.npc-tree-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-radius: 5px;
+}
+.npc-tree-row > button:first-child {
+  padding: 7px 4px;
+  flex: none;
+  color: #ba9858;
+}
+.npc-tree-row > button:last-child,
+.npc-fixed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 1;
+  width: 100%;
+  text-align: left;
+  padding: 7px 5px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.npc-tree span {
+  color: #b7aa91;
+  font-size: 11px;
+}
+.npc-tree .is-current {
+  background: #b88d3f26;
+  color: #f0d38a;
+}
+.npc-results {
+  min-width: 0;
+}
+.npc-manager .btn {
+  font-size: 12px;
+  padding: 6px 9px;
+}
+.npc-toolbar > .input {
+  width: auto;
+  min-width: 0;
+}
+.npc-search {
+  flex: 1;
+}
+.npc-toolbar label {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+}
+.npc-action,
+.npc-create {
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  display: grid;
+  gap: 9px;
+}
+.npc-create {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding: 9px;
+  gap: 7px;
+}
+.npc-create .npc-toolbar {
+  margin-bottom: 0;
+}
+.npc-create > p {
+  grid-column: 1 / -1;
+}
+.npc-action p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #d6c5a3;
+}
+.npc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.npc-card {
+  min-width: 0;
+  border: 1px solid #6f654a70;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #141d25;
+}
+.npc-card .grid-card {
+  border: 0;
+  border-radius: 0;
+}
+.npc-card-tools {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px;
+  font-size: 11px;
+  color: #dbc38d;
+}
+.npc-card-tools label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.npc-path {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px;
+  border-top: 1px solid #6f654a70;
+  font-size: 11px;
+  color: #c6b079;
+  overflow-wrap: anywhere;
+}
+.npc-path:hover {
+  background: #b88d3f20;
+}
+.npc-pagination {
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.npc-error {
+  color: #f3aaaa;
+  font-size: 12px;
+  padding: 8px;
+}
+@container (max-width:560px) {
+  .npc-browser {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .npc-tree {
+    max-height: 200px;
+  }
+}
+@container (max-width:300px) {
+  .npc-create {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .npc-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

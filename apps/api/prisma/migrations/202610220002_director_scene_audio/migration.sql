@@ -1,0 +1,1 @@
+ALTER TABLE "PresentationCue" ADD COLUMN "audioCue" JSONB NOT NULL DEFAULT '{}';

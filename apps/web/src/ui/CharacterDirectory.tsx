@@ -1,3 +1,4 @@
+import NpcDirectory from './NpcDirectory';
 import { useState } from 'react';
 import type { Snapshot } from '../api';
 import { useUI } from '../store';
@@ -50,27 +51,121 @@ export default function CharacterDirectory({ p }: { p: Props }) {
       setError((cause as Error).message);
     }
   }
+  const renderCard = (c: any) => (
+    <article key={c.id} className="grid-card text-center">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={c.name}
+        className="w-full cursor-pointer"
+        onClick={() => open('character', c.id)}
+        onKeyDown={(event) => {
+          if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            open('character', c.id);
+          }
+        }}
+        draggable={canEditCharacter(p.snap, p.me.id, c)}
+        onDragStart={(event) => event.dataTransfer.setData('characterId', c.id)}
+      >
+        <CharacterTagBadges snap={p.snap} characterId={c.id}>
+          <div className="character-avatar mx-auto">
+            {c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : <span>{c.name.slice(0, 1)}</span>}
+          </div>
+        </CharacterTagBadges>
+        <div className="mt-2 truncate">{c.name}</div>
+        <div className="tiny subtle">
+          {c.isNpc ? 'GM 控制的 NPC' : p.snap.room.sheetMode ? '自定义人物卡' : `Lv.${c.level}`}
+        </div>
+      </div>
+      {p.isGM ? (
+        <div className="mt-2 space-y-2">
+          <CharacterTagManageButton characterId={c.id} isGM />
+          <select
+            className="input !p-1 text-xs"
+            value={c.isNpc ? 'NPC' : 'PLAYER'}
+            aria-label={`${c.name}角色类型`}
+            onChange={(event) => void patch(c, { isNpc: event.target.value === 'NPC' })}
+          >
+            <option value="PLAYER">玩家角色</option>
+            <option value="NPC">NPC（仅 GM 控制）</option>
+          </select>
+          {!c.isNpc && (
+            <select
+              className="input !p-1 text-xs"
+              value={c.ownerId || ''}
+              onChange={(event) => void patch(c, { ownerId: event.target.value || null })}
+              aria-label={`${c.name}控制者`}
+            >
+              <option value="">未分配</option>
+              {p.snap.members.map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {roomMemberName(member)}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            className="tiny text-amber-300"
+            onClick={() => void patch(c, { visibility: c.visibility === 'GM' ? 'PUBLIC' : 'GM' })}
+          >
+            {c.visibility === 'GM' ? '仅 GM 可见 · 点击公开' : '房间公开 · 点击隐藏'}
+          </button>
+        </div>
+      ) : (
+        <div className="tiny subtle mt-2">
+          {c.isNpc
+            ? 'GM 控制'
+            : roomMemberName(
+                p.snap.members.find((member) => member.userId === c.ownerId),
+                '未分配',
+              )}
+        </div>
+      )}
+    </article>
+  );
+  const tabs = (
+    <div className="character-directory-tabs" role="tablist" aria-label="角色分类">
+      {(['players', 'npcs'] as const).map((value) => (
+        <button
+          key={value}
+          role="tab"
+          aria-selected={tab === value}
+          className={`btn ${tab === value ? 'btn-primary' : ''}`}
+          onClick={() => {
+            setTab(value);
+            setPage(0);
+            setError('');
+          }}
+        >
+          {value === 'players' ? '玩家角色' : 'NPC'} ·{' '}
+          {p.snap.characters.filter((c) => Boolean(c.isNpc) === (value === 'npcs')).length}
+        </button>
+      ))}
+    </div>
+  );
+  if (p.isGM && npcs)
+    return (
+      <div className="space-y-4">
+        {tabs}
+        <NpcDirectory
+          key={`${p.snap.room.id}:${p.me.id}`}
+          snap={p.snap}
+          me={p.me}
+          mutate={p.mutate}
+          renderCard={renderCard}
+        />
+        {error && (
+          <p role="alert" className="tiny text-red-300">
+            {error}
+          </p>
+        )}
+      </div>
+    );
   return (
     <div className="space-y-4">
       <div className="eyebrow">CHARACTERS & NPCS</div>
-      <div className="character-directory-tabs" role="tablist" aria-label="角色分类">
-        {(['players', 'npcs'] as const).map((value) => (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={tab === value}
-            className={`btn ${tab === value ? 'btn-primary' : ''}`}
-            onClick={() => {
-              setTab(value);
-              setPage(0);
-              setError('');
-            }}
-          >
-            {value === 'players' ? '玩家角色' : 'NPC'} ·{' '}
-            {p.snap.characters.filter((c) => Boolean(c.isNpc) === (value === 'npcs')).length}
-          </button>
-        ))}
-      </div>
+      {tabs}
       {p.isGM ? (
         <form
           className="panel p-3 rounded-lg space-y-3"
@@ -124,81 +219,7 @@ export default function CharacterDirectory({ p }: { p: Props }) {
       ) : (
         npcs && <p className="tiny subtle">这里显示 GM 已公开的 NPC，玩家可以查看，控制权属于 GM。</p>
       )}
-      <div className="grid grid-cols-2 gap-3">
-        {list.map((c) => (
-          <article key={c.id} className="grid-card text-center">
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={c.name}
-              className="w-full cursor-pointer"
-              onClick={() => open('character', c.id)}
-              onKeyDown={(event) => {
-                if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-                  event.preventDefault();
-                  open('character', c.id);
-                }
-              }}
-              draggable={canEditCharacter(p.snap, p.me.id, c)}
-              onDragStart={(event) => event.dataTransfer.setData('characterId', c.id)}
-            >
-              <CharacterTagBadges snap={p.snap} characterId={c.id}>
-                <div className="character-avatar mx-auto">
-                  {c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : <span>{c.name.slice(0, 1)}</span>}
-                </div>
-              </CharacterTagBadges>
-              <div className="mt-2 truncate">{c.name}</div>
-              <div className="tiny subtle">
-                {c.isNpc ? 'GM 控制的 NPC' : p.snap.room.sheetMode ? '自定义人物卡' : `Lv.${c.level}`}
-              </div>
-            </div>
-            {p.isGM ? (
-              <div className="mt-2 space-y-2">
-                <CharacterTagManageButton characterId={c.id} isGM />
-                <select
-                  className="input !p-1 text-xs"
-                  value={c.isNpc ? 'NPC' : 'PLAYER'}
-                  aria-label={`${c.name}角色类型`}
-                  onChange={(event) => void patch(c, { isNpc: event.target.value === 'NPC' })}
-                >
-                  <option value="PLAYER">玩家角色</option>
-                  <option value="NPC">NPC（仅 GM 控制）</option>
-                </select>
-                {!c.isNpc && (
-                  <select
-                    className="input !p-1 text-xs"
-                    value={c.ownerId || ''}
-                    onChange={(event) => void patch(c, { ownerId: event.target.value || null })}
-                    aria-label={`${c.name}控制者`}
-                  >
-                    <option value="">未分配</option>
-                    {p.snap.members.map((member) => (
-                      <option key={member.userId} value={member.userId}>
-                        {roomMemberName(member)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button
-                  className="tiny text-amber-300"
-                  onClick={() => void patch(c, { visibility: c.visibility === 'GM' ? 'PUBLIC' : 'GM' })}
-                >
-                  {c.visibility === 'GM' ? '仅 GM 可见 · 点击公开' : '房间公开 · 点击隐藏'}
-                </button>
-              </div>
-            ) : (
-              <div className="tiny subtle mt-2">
-                {c.isNpc
-                  ? 'GM 控制'
-                  : roomMemberName(
-                      p.snap.members.find((member) => member.userId === c.ownerId),
-                      '未分配',
-                    )}
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
+      <div className="grid grid-cols-2 gap-3">{list.map(renderCard)}</div>
       {!list.length && (
         <div className="empty-note">{npcs ? '暂无可见的 NPC。' : '还没有角色。主持人可创建并分配给玩家。'}</div>
       )}

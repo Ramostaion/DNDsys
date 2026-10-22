@@ -1,3 +1,4 @@
+import { npcDirectoryOperation } from '../npc-directory.js';
 import { initiativeOperation, turnOperation } from '../turn-system.js';
 import { characterOperation } from './characters.js';
 import { mapOperation } from './maps.js';
@@ -15,6 +16,8 @@ import type { OperationContext } from './context.js';
 
 export function dispatchOperation(context: OperationContext) {
   switch (context.type.split('.')[0]) {
+    case 'npcDirectory':
+      return npcDirectoryOperation(context);
     case 'initiative':
       return initiativeOperation(context);
     case 'turn':

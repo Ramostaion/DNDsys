@@ -1,0 +1,231 @@
+.director-audio {
+  padding: 16px;
+  border: 1px solid #b88d3f80;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1e2730, #111922);
+  margin-bottom: 18px;
+}
+.director-audio header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.director-audio h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  color: #edd293;
+}
+.director-audio header p {
+  font-size: 12px;
+  color: #aeb8bd;
+  margin-top: 5px;
+}
+.audio-upload {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+.audio-upload input {
+  display: none;
+}
+.audio-upload.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.director-audio-library {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+.director-audio-library > label {
+  font-size: 12px;
+  color: #cfc5af;
+}
+.director-audio-library select {
+  margin-top: 5px;
+}
+.audio-title-edit {
+  display: flex;
+  gap: 6px;
+}
+.audio-title-edit .input {
+  min-width: 0;
+  flex: 1;
+}
+.audio-title-edit .btn {
+  flex: none;
+}
+.audio-room-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.audio-room-controls .btn {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.audio-loop {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: #d9c28c;
+}
+.audio-now-playing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  margin-top: 14px;
+}
+.audio-now-playing span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #e5ce99;
+}
+.audio-now-playing strong {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #c0c6c3;
+}
+.audio-seek {
+  width: 100%;
+  margin: 8px 0;
+  accent-color: #d4af57;
+}
+.audio-master-volume {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.audio-master-volume input {
+  flex: 1;
+  min-width: 0;
+  accent-color: #d4af57;
+}
+.audio-master-volume span {
+  min-width: 36px;
+  text-align: right;
+}
+.audio-message {
+  font-size: 12px;
+  color: #edd293;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.room-audio-slot {
+  flex-shrink: 0;
+}
+.room-audio-slot > audio {
+  display: none;
+}
+.room-audio-player {
+  pointer-events: auto;
+  padding: 10px 12px;
+  border: 1px solid #92713c;
+  border-radius: 9px;
+  background: #111a24ed;
+  color: #dfd3b8;
+  animation: audio-player-enter 0.2s ease both;
+}
+.room-audio-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.room-audio-title > svg {
+  flex: none;
+  color: #dbb760;
+}
+.room-audio-title strong {
+  font-size: 12px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-audio-title small {
+  font-size: 10px;
+  flex: none;
+  color: #b3b9b8;
+}
+.room-audio-personal {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 10px;
+}
+.room-audio-personal button {
+  padding: 3px;
+  color: #e2bf6a;
+}
+.room-audio-personal input {
+  min-width: 0;
+  flex: 1;
+  accent-color: #d4af57;
+}
+.room-audio-personal span {
+  min-width: 28px;
+}
+.audio-autoplay-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #cfc5af;
+}
+.audio-retry {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  padding: 8px;
+  border: 1px solid #b88d3f;
+  border-radius: 6px;
+  color: #f0d38a;
+  margin-top: 8px;
+  background: #46371e;
+}
+.audio-retry {
+  background: #211c18;
+  font-size: 11px;
+}
+.room-audio-floating {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 20000;
+  color: #e8ce91;
+  width: 210px;
+}
+.room-audio-floating.is-presentation {
+  top: 60px;
+  right: 16px;
+}
+@keyframes audio-player-enter {
+  from {
+    opacity: 0;
+    translate: 0 -3px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .room-audio-player {
+    animation: none;
+  }
+}

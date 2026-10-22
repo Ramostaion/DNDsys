@@ -11,6 +11,8 @@ import { registerRoomRoutes } from './routes/rooms.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerOperations } from './operations.js';
 import { registerPresentation } from './presentation.js';
+import { registerRoomAudio } from './room-audio.js';
+import { registerNpcDirectory } from './npc-directory.js';
 import { registerPrivateClues } from './private-clues.js';
 import { errorHandler } from './error-handler.js';
 import { registerWebRoutes } from './web-static.js';
@@ -53,11 +55,19 @@ export function createApplication(db: PrismaClient, config: ApiConfig) {
   registerRoomRoutes(app, context, realtime.kick, realtime.roomDeleted);
   registerUploadRoutes(app, context);
   registerOperations(app, db, session.auth, realtime.emit, realtime.emitPrivate);
+  registerNpcDirectory(app, db, session.auth);
   registerCombatDrafts(app, db, session.auth, (roomId) =>
     realtime.io.to(roomId).emit('combatDraft.changed', { roomId }),
   );
-  registerPresentation(app, db, session.auth, (roomId, revision) =>
-    realtime.io.to(roomId).emit('presentation.changed', { roomId, revision }),
+  registerPresentation(
+    app,
+    db,
+    session.auth,
+    (roomId, revision) => realtime.io.to(roomId).emit('presentation.changed', { roomId, revision }),
+    (roomId, revision) => realtime.io.to(roomId).emit('presentation.audio.changed', { roomId, revision }),
+  );
+  registerRoomAudio(app, db, session.auth, (roomId, revision, library) =>
+    realtime.io.to(roomId).emit('presentation.audio.changed', { roomId, revision, library }),
   );
   registerPrivateClues(app, db, session.auth, (roomId, userIds, kind) => {
     for (const userId of new Set(userIds))

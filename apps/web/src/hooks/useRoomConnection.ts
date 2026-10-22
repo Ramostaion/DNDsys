@@ -9,6 +9,9 @@ type Options = {
   refresh: () => unknown;
   refreshPresentation: () => unknown;
   presentationChanged: (revision: number) => void;
+  refreshAudio: () => unknown;
+  audioChanged: (notice: { revision?: number; library?: boolean }) => void;
+  resetAudio: () => void;
   refreshClues: (notify?: boolean) => unknown;
   onKicked: () => void;
   onDeleted: () => void;
@@ -36,6 +39,7 @@ export function useRoomConnection(options: Options) {
     const refreshAll = () => {
       void callbacks.current.refresh();
       void callbacks.current.refreshPresentation();
+      void callbacks.current.refreshAudio();
       void callbacks.current.refreshClues();
       notifyCombatDrafts(roomId, true);
     };
@@ -53,6 +57,7 @@ export function useRoomConnection(options: Options) {
       if (active && navigator.onLine) {
         void callbacks.current.refresh();
         void callbacks.current.refreshPresentation();
+        void callbacks.current.refreshAudio();
       }
     };
     window.addEventListener('offline', offline);
@@ -76,10 +81,14 @@ export function useRoomConnection(options: Options) {
         });
     });
     socket.on('disconnect', (reason) => {
+      callbacks.current.resetAudio();
       callbacks.current.resetMovements();
       setConnected(false);
       setOnline(new Set());
       if (reason === 'io server disconnect' && navigator.onLine) reconnectTimer = setTimeout(reconnect, 1000);
+    });
+    socket.on('presentation.audio.changed', (notice: { roomId: string; revision?: number; library?: boolean }) => {
+      if (notice.roomId === roomId) callbacks.current.audioChanged(notice);
     });
     socket.on(
       'change',

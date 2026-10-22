@@ -13,6 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import { array, object } from './data.js';
 import { visibleCharacterTags } from './character-tags.js';
 import { fail } from './http.js';
+import { readNpcDirectory } from './npc-directory.js';
 import { visibleTurnSession } from './turn-system.js';
 import { memberCan } from './permissions.js';
 import { visibleCombatRecord, visibleModifier } from './combat-visibility.js';
@@ -154,12 +155,21 @@ export async function snapshot(
     canRedo: history.some((h) => h.mapId === map.id && h.state === 'UNDONE'),
   }));
   const allLogs = await db.activityLog.findMany({
-    where: { roomId, ...(isGM ? {} : { action: { notIn: ['dice.roll', 'combat.record', 'combat.correct'] } }) },
+    where: {
+      roomId,
+      ...(isGM
+        ? {}
+        : {
+            action: { notIn: ['dice.roll', 'combat.record', 'combat.correct'] },
+            NOT: { action: { startsWith: 'npcDirectory.' } },
+          }),
+    },
     orderBy: { createdAt: 'desc' },
     take: 100,
   });
   const characterById = new Map(allCharacters.map((character) => [character.id, character]));
   const logs = allLogs.filter((log) => {
+    if (!isGM && log.action.startsWith('npcDirectory.')) return false;
     if (isGM) return true;
     if (log.action.startsWith('turn.') || log.action.startsWith('initiative.')) return false;
     if (log.action.startsWith('tagDefinition.') || log.action.startsWith('characterTag.')) return false;
@@ -268,6 +278,7 @@ export async function snapshot(
     fail(409, '回合正在更新，请刷新以获取完整状态');
   }
   return {
+    ...(isGM ? { npcDirectory: await readNpcDirectory(db, roomId) } : {}),
     room: visibleRoom,
     members,
     characters,

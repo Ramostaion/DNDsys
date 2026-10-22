@@ -22,6 +22,7 @@ import RoomBroadcasts from '../ui/RoomBroadcasts';
 import { TokenMovementChannel } from '../ui/token-motion';
 import { ResourceFeedbackScope } from '../ui/ResourceMeter';
 import CombatDraftPerformances from '../ui/combat/CombatDraftPerformances';
+import { RoomAudioContext, useRoomAudio } from '../ui/presentation/useRoomAudio';
 
 const Board = lazy(() => import('../ui/Board'));
 const Windows = lazy(() => import('../ui/Windows'));
@@ -40,6 +41,7 @@ export default function Room({ me }: { me: any }) {
   const open = useUI((s) => s.open);
   const hasWindows = useUI((s) => s.windows.length > 0);
   const presentation = usePresentation(roomId);
+  const audio = useRoomAudio(roomId);
   const privateClues = usePrivateClues(roomId, me.id);
   const { snap, isLoading, refetch, mutate, error, setError, unavailable, dataUpdatedAt } = useRoomSession(
     roomId,
@@ -57,6 +59,9 @@ export default function Room({ me }: { me: any }) {
     refresh: refetch,
     refreshPresentation: presentation.refresh,
     presentationChanged: presentation.changed,
+    refreshAudio: audio.refresh,
+    audioChanged: audio.changed,
+    resetAudio: audio.reset,
     refreshClues: privateClues.refresh,
     onKicked: () => navigate('/rooms'),
     onDeleted: returnToLobby,
@@ -83,143 +88,146 @@ export default function Room({ me }: { me: any }) {
   const turn = snap.encounter?.combatants?.slice().sort(compareCombatants)[snap.encounter?.turnIndex ?? 0];
   const turnCharacter = snap.characters.find((c) => c.id === turn?.characterId);
   return (
-    <ResourceFeedbackScope connected={connected} updatedAt={dataUpdatedAt}>
-      <RoomDiceContext.Provider value={{ clock: dice.clock, updateClock: dice.updateClock }}>
-        <PrivateClueContext.Provider value={privateClues}>
-          <div className="game-shell h-screen overflow-hidden flex" data-turn-active={Boolean(snap.turnSession)}>
-            <RoomSidebar isGM={isGM} unreadCount={privateClues.unreadCount} />
-            <section className="flex-1 relative min-w-0">
-              <RoomBroadcasts
-                key={`${roomId}:${me.id}`}
-                roomId={roomId!}
-                dice={dice.cue}
-                combat={combat.cue}
-                hasTurn={Boolean(snap.encounter)}
-              />
-              <LoadBoundary>
-                <Suspense fallback={<div className="min-h-full grid place-items-center subtle">正在准备地图…</div>}>
-                  <Board snap={snap} me={me} mutate={mutate} open={open} movements={movements} />
-                </Suspense>
-              </LoadBoundary>
-              <div className="room-heading pointer-events-none">
-                <div className="eyebrow">
-                  THE ADVENTURE TABLE · {snap.room.status === 'ACTIVE' ? '进行中' : '准备中'}
-                </div>
-                <div className="display-title text-2xl mt-1">{snap.room.name}</div>
-                <div className="text-sm text-amber-100/70 flex items-center gap-2 mt-1">
-                  <Compass size={15} />
-                  {active?.name || '尚未布置地图'}
-                </div>
-              </div>
-              <CombatDraftPerformances
-                key={`${roomId}:${me.id}`}
-                roomId={roomId!}
-                userId={me.id}
-                connected={connected}
-              />
-              <TurnHUD
-                key={`${roomId}:${me.id}`}
-                session={snap.turnSession}
-                visibleCharacters={snap.characters}
-                visibleMaps={snap.maps}
-                visibleStates={snap.characterTags}
-                isGM={isGM}
-                connected={connected}
-                mutate={mutate}
-              />
-              <PartyPanel
-                snap={snap}
-                me={me}
-                isGM={isGM}
-                online={online}
-                connected={connected}
-                onError={setError}
-                onStart={() =>
-                  void post(`/rooms/${roomId}/start`, {})
-                    .then(() => refetch())
-                    .catch((e) => setError(e.message))
-                }
-              />
-              {snap.encounter && (
-                <button className="turn-banner" onClick={() => open('combat')}>
-                  <Swords size={18} />
-                  <span>
-                    第 {snap.encounter.round} 轮 · 轮到 <strong>{turnCharacter?.name || '角色'}</strong>
-                  </span>
-                  <ChevronRight size={16} />
-                </button>
-              )}
-              <div className="quick-bar">
-                <button onClick={() => open('characters')}>
-                  <Users size={19} />
-                  <span>人物卡</span>
-                </button>
-                <button onClick={() => open('dice')}>
-                  <Dices size={20} />
-                  <span>掷骰</span>
-                </button>
-                <button onClick={() => open('combat')}>
-                  <Swords size={20} />
-                  <span>战斗</span>
-                </button>
-                <button onClick={() => open('quests')}>
-                  <ScrollText size={19} />
-                  <span>任务</span>
-                </button>
-              </div>
-              <PresentationViewer
-                roomId={roomId!}
-                userId={me.id}
-                isGM={isGM}
-                current={presentation.current}
-                error={presentation.error}
-                onRetry={() => void presentation.refresh()}
-              />
-              {hasWindows && (
+    <RoomAudioContext.Provider value={audio}>
+      <ResourceFeedbackScope connected={connected} updatedAt={dataUpdatedAt}>
+        <RoomDiceContext.Provider value={{ clock: dice.clock, updateClock: dice.updateClock }}>
+          <PrivateClueContext.Provider value={privateClues}>
+            <div className="game-shell h-screen overflow-hidden flex" data-turn-active={Boolean(snap.turnSession)}>
+              <RoomSidebar isGM={isGM} unreadCount={privateClues.unreadCount} />
+              <section className="flex-1 relative min-w-0">
+                <RoomBroadcasts
+                  key={`${roomId}:${me.id}`}
+                  roomId={roomId!}
+                  dice={dice.cue}
+                  combat={combat.cue}
+                  hasTurn={Boolean(snap.encounter)}
+                />
                 <LoadBoundary>
-                  <Suspense fallback={null}>
-                    <Windows
-                      snap={snap}
-                      me={me}
-                      isGM={isGM}
-                      mutate={mutate}
-                      refresh={refetch}
-                      presentation={presentation.current}
-                      refreshPresentation={presentation.refresh}
-                    />
+                  <Suspense fallback={<div className="min-h-full grid place-items-center subtle">正在准备地图…</div>}>
+                    <Board snap={snap} me={me} mutate={mutate} open={open} movements={movements} />
                   </Suspense>
                 </LoadBoundary>
-              )}
-            </section>
-            {privateClues.notice && (
-              <div className="private-clue-notice" role="status" data-notice-id={privateClues.noticeId}>
-                <SealedClueMark key={privateClues.noticeId} />
-                <div>
-                  <p>{privateClues.notice}</p>
-                  <div className="clue-notice-actions">
-                    <button
-                      onClick={() => {
-                        open('private-clues');
-                        privateClues.dismiss();
-                      }}
-                    >
-                      打开收件箱
-                    </button>
-                    <button aria-label="关闭私密线索通知" onClick={privateClues.dismiss}>
-                      稍后查看
-                    </button>
+                <div className="room-heading pointer-events-none">
+                  <div className="eyebrow">
+                    THE ADVENTURE TABLE · {snap.room.status === 'ACTIVE' ? '进行中' : '准备中'}
+                  </div>
+                  <div className="display-title text-2xl mt-1">{snap.room.name}</div>
+                  <div className="text-sm text-amber-100/70 flex items-center gap-2 mt-1">
+                    <Compass size={15} />
+                    {active?.name || '尚未布置地图'}
                   </div>
                 </div>
-              </div>
-            )}
-            {error && (
-              <div className="toast" onClick={() => setError('')}>
-                {error} <span className="ml-2 cursor-pointer">×</span>
-              </div>
-            )}
-          </div>
-        </PrivateClueContext.Provider>
-      </RoomDiceContext.Provider>
-    </ResourceFeedbackScope>
+                <CombatDraftPerformances
+                  key={`${roomId}:${me.id}`}
+                  roomId={roomId!}
+                  userId={me.id}
+                  connected={connected}
+                />
+                <TurnHUD
+                  key={`${roomId}:${me.id}`}
+                  session={snap.turnSession}
+                  visibleCharacters={snap.characters}
+                  visibleMaps={snap.maps}
+                  visibleStates={snap.characterTags}
+                  isGM={isGM}
+                  connected={connected}
+                  mutate={mutate}
+                />
+                <PartyPanel
+                  presentationActive={Boolean(presentation.current && presentation.current.status !== 'idle')}
+                  snap={snap}
+                  me={me}
+                  isGM={isGM}
+                  online={online}
+                  connected={connected}
+                  onError={setError}
+                  onStart={() =>
+                    void post(`/rooms/${roomId}/start`, {})
+                      .then(() => refetch())
+                      .catch((e) => setError(e.message))
+                  }
+                />
+                {snap.encounter && (
+                  <button className="turn-banner" onClick={() => open('combat')}>
+                    <Swords size={18} />
+                    <span>
+                      第 {snap.encounter.round} 轮 · 轮到 <strong>{turnCharacter?.name || '角色'}</strong>
+                    </span>
+                    <ChevronRight size={16} />
+                  </button>
+                )}
+                <div className="quick-bar">
+                  <button onClick={() => open('characters')}>
+                    <Users size={19} />
+                    <span>人物卡</span>
+                  </button>
+                  <button onClick={() => open('dice')}>
+                    <Dices size={20} />
+                    <span>掷骰</span>
+                  </button>
+                  <button onClick={() => open('combat')}>
+                    <Swords size={20} />
+                    <span>战斗</span>
+                  </button>
+                  <button onClick={() => open('quests')}>
+                    <ScrollText size={19} />
+                    <span>任务</span>
+                  </button>
+                </div>
+                <PresentationViewer
+                  roomId={roomId!}
+                  userId={me.id}
+                  isGM={isGM}
+                  current={presentation.current}
+                  error={presentation.error}
+                  onRetry={() => void presentation.refresh()}
+                />
+                {hasWindows && (
+                  <LoadBoundary>
+                    <Suspense fallback={null}>
+                      <Windows
+                        snap={snap}
+                        me={me}
+                        isGM={isGM}
+                        mutate={mutate}
+                        refresh={refetch}
+                        presentation={presentation.current}
+                        refreshPresentation={presentation.refresh}
+                      />
+                    </Suspense>
+                  </LoadBoundary>
+                )}
+              </section>
+              {privateClues.notice && (
+                <div className="private-clue-notice" role="status" data-notice-id={privateClues.noticeId}>
+                  <SealedClueMark key={privateClues.noticeId} />
+                  <div>
+                    <p>{privateClues.notice}</p>
+                    <div className="clue-notice-actions">
+                      <button
+                        onClick={() => {
+                          open('private-clues');
+                          privateClues.dismiss();
+                        }}
+                      >
+                        打开收件箱
+                      </button>
+                      <button aria-label="关闭私密线索通知" onClick={privateClues.dismiss}>
+                        稍后查看
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {error && (
+                <div className="toast" onClick={() => setError('')}>
+                  {error} <span className="ml-2 cursor-pointer">×</span>
+                </div>
+              )}
+            </div>
+          </PrivateClueContext.Provider>
+        </RoomDiceContext.Provider>
+      </ResourceFeedbackScope>
+    </RoomAudioContext.Provider>
   );
 }

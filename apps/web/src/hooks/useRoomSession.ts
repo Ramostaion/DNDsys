@@ -27,7 +27,10 @@ export function useRoomSession(roomId: string | undefined, userId: string) {
       return result;
     } catch (e) {
       setError((e as Error).message);
-      if (type === 'token.move' || ['drawing.', 'turn.', 'initiative.'].some((prefix) => type.startsWith(prefix)))
+      if (
+        type === 'token.move' ||
+        ['drawing.', 'turn.', 'initiative.', 'npcDirectory.'].some((prefix) => type.startsWith(prefix))
+      )
         await refetch();
       throw e;
     }

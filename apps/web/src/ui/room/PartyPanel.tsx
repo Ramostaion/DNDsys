@@ -1,4 +1,5 @@
 import { TurnCounter } from '../turns/TurnHUD';
+import RoomAudioPlayer from '../presentation/RoomAudioPlayer';
 import { useEffect, useState } from 'react';
 import { Wifi, WifiOff, Copy, Check, Sparkles } from 'lucide-react';
 import type { Snapshot } from '../../api';
@@ -29,10 +30,11 @@ type Props = {
   isGM: boolean;
   online: Set<string>;
   connected: boolean;
+  presentationActive?: boolean;
   onError: (message: string) => void;
   onStart: () => void;
 };
-export default function PartyPanel({ snap, me, isGM, online, connected, onError, onStart }: Props) {
+export default function PartyPanel({ snap, me, isGM, online, connected, onError, onStart, presentationActive }: Props) {
   const open = useUI((s) => s.open),
     [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -109,6 +111,14 @@ export default function PartyPanel({ snap, me, isGM, online, connected, onError,
         )}
       </div>
       <TurnCounter session={snap.turnSession} />
+      <RoomAudioPlayer
+        key={me.id}
+        userId={me.id}
+        connected={connected}
+        presentationActive={presentationActive}
+        roomId={snap.room.id}
+        isGM={isGM}
+      />
       {isGM && rollSummary}
       {owned.length > 0 && (
         <div className="hero-tray">

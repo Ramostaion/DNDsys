@@ -1,4 +1,4 @@
-import { api } from './server-address';
+import { api, apiBase } from './server-address';
 import { test, expect, type BrowserContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
@@ -6,15 +6,58 @@ import { unlink } from 'node:fs/promises';
 import sharp from 'sharp';
 import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
+import { createApplication } from '../src/app';
+import { readConfig } from '../src/config';
+import { uploadDir } from '../src/storage';
 
 config({ path: 'apps/api/.env' });
 
-async function login(context: BrowserContext, username: string) {
+let owned: ReturnType<typeof createApplication> | undefined, ownedDb: PrismaClient | undefined;
+let ownedQueries = 0,
+  ownedLastQuery = Date.now();
+test.beforeAll(async () => {
+  if (process.env.DND_E2E_ISOLATED !== '1') return;
+  const address = new URL(apiBase);
+  if (!['localhost', '127.0.0.1'].includes(address.hostname) || !address.port || address.port === '5242')
+    throw new Error('隔离放映测试需要独立本机端口');
+  ownedDb = new PrismaClient();
+  const tracked = ownedDb.$extends({
+    query: {
+      async $allOperations({ args, query }) {
+        ownedQueries++;
+        try {
+          return await query(args);
+        } finally {
+          ownedQueries--;
+          ownedLastQuery = Date.now();
+        }
+      },
+    },
+  });
+  owned = createApplication(tracked as unknown as PrismaClient, {
+    ...readConfig(),
+    origin: address.origin,
+    secureCookie: false,
+    webDir: resolve('apps/web/dist'),
+  });
+  await new Promise<void>((done, reject) => {
+    owned!.server.once('error', reject);
+    owned!.server.listen(Number(address.port), address.hostname, done);
+  });
+});
+test.afterAll(async () => {
+  if (owned) {
+    owned.beginShutdown();
+    await new Promise<void>((done) => owned!.io.close(() => done()));
+    await expect.poll(() => ownedQueries === 0 && Date.now() - ownedLastQuery > 200).toBe(true);
+    await ownedDb?.$disconnect();
+  }
+});
+
+async function registerAccount(context: BrowserContext, username: string) {
+  await post(context, '/auth/register', { username, password: randomUUID() });
   const page = await context.newPage();
-  await page.goto('/login');
-  await page.getByRole('textbox', { name: '冒险者名称' }).fill(username);
-  await page.getByRole('textbox', { name: '密码' }).fill('demo12345');
-  await page.getByRole('button', { name: '进入冒险' }).click();
+  await page.goto('/rooms');
   await expect(page).toHaveURL(/\/rooms$/);
   return page;
 }
@@ -30,11 +73,12 @@ test('GM 放映三张剧情图时，两名玩家同步且人物卡草稿保持�
   const db = new PrismaClient(),
     contexts = [await browser.newContext(), await browser.newContext(), await browser.newContext()];
   let roomId: string | undefined;
+  const prefix = `presentation-${randomUUID().slice(0, 8)}`;
   try {
     const [gm, p1, p2] = await Promise.all([
-      login(contexts[0], 'demo-gm'),
-      login(contexts[1], 'demo-player-1'),
-      login(contexts[2], 'demo-player-2'),
+      registerAccount(contexts[0], `${prefix}-gm`),
+      registerAccount(contexts[1], `${prefix}-player-1`),
+      registerAccount(contexts[2], `${prefix}-player-2`),
     ]);
     const room = await post(contexts[0], '/rooms', { name: `E2E presentation ${randomUUID().slice(0, 8)}` });
     roomId = room.id;
@@ -60,20 +104,22 @@ test('GM 放映三张剧情图时，两名玩家同步且人物卡草稿保持�
       .toBuffer();
     for (const name of ['第一幕', '第二幕', '第三幕']) {
       await gm
-        .locator('.presentation-director input[type=file]')
+        .locator('.presentation-director input[type=file][accept*="image/jpeg"]')
         .setInputFiles({ name: `${name}.png`, mimeType: 'image/png', buffer: png });
       await expect(gm.locator('.presentation-asset').filter({ hasText: name })).toBeVisible();
     }
     console.log('presentation e2e: three images uploaded');
+    await gm.getByText('章节管理', { exact: true }).click();
     await gm.getByRole('textbox', { name: '新章节名称' }).fill('序章');
     await gm.getByRole('button', { name: '创建章节' }).click();
     await expect(gm.getByRole('combobox', { name: '章节筛选' })).toHaveValue(/.+/);
     await gm.getByRole('combobox', { name: '章节筛选' }).selectOption('');
     await gm.locator('.presentation-asset').filter({ hasText: '第一幕' }).click();
+    await gm.getByText('编辑素材信息', { exact: true }).click();
     await gm.getByRole('textbox', { name: '玩家可见说明' }).fill('第一幕的线索');
     await gm.getByRole('textbox', { name: 'GM 私人备注' }).fill('这里隐藏着陷阱');
     await gm.getByRole('button', { name: '保存素材信息' }).click();
-    await gm.getByRole('button', { name: '加入条目' }).click();
+    await gm.getByRole('button', { name: '保存为场景卡片', exact: true }).click();
     await expect(
       gm.locator('.grid-card').filter({ hasText: '演出条目' }).getByRole('button', { name: '放映' }),
     ).toBeVisible();
@@ -123,7 +169,9 @@ test('GM 放映三张剧情图时，两名玩家同步且人物卡草稿保持�
       },
     });
     await expect(
-      p1.locator('.character-sheet').getByRole('button', { name: '标签：剧情线索', exact: true }),
+      p1
+        .locator('.character-sheet [aria-label="人物状态"]')
+        .getByRole('button', { name: '状态：剧情线索', exact: true }),
     ).toBeVisible();
     await expect(draft).toHaveValue('未保存的角色名草稿');
     await expect(draft).toBeFocused();
@@ -184,7 +232,7 @@ test('GM 放映三张剧情图时，两名玩家同步且人物卡草稿保持�
     await expect(p2.locator('.presentation-titlebar')).toContainText('第三幕');
     const lateContext = await browser.newContext();
     contexts.push(lateContext);
-    const late = await login(lateContext, 'demo-player-3');
+    const late = await registerAccount(lateContext, `${prefix}-player-3`);
     await post(lateContext, '/rooms/join', { inviteCode: room.inviteCode });
     await late.goto(`/rooms/${room.id}`);
     await expect(late.locator('.presentation-titlebar')).toContainText('第三幕');
@@ -209,12 +257,16 @@ test('GM 放映三张剧情图时，两名玩家同步且人物卡草稿保持�
           select: { storageName: true, screenName: true, thumbName: true },
         });
         await db.room.delete({ where: { id: roomId } });
-        const root = resolve('apps/api', process.env.UPLOAD_DIR || 'uploads', roomId, 'presentation');
+        const root =
+          process.env.DND_E2E_ISOLATED === '1'
+            ? join(uploadDir, roomId, 'presentation')
+            : resolve('apps/api', process.env.UPLOAD_DIR || 'uploads', roomId, 'presentation');
         for (const asset of assets)
           for (const name of [asset.storageName, asset.screenName, asset.thumbName])
             await unlink(join(root, name)).catch(() => {});
       }
     }
+    await db.user.deleteMany({ where: { username: { startsWith: prefix + '-' } } });
     await db.$disconnect();
   }
 });

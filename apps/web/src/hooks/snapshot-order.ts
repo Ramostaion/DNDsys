@@ -6,6 +6,13 @@ export function shareRoomSnapshot(previous: unknown, incoming: unknown): Snapsho
   const old = previous as Snapshot | undefined,
     next = incoming as Snapshot;
   if (
+    old?.room.id === next.room.id &&
+    old?.npcDirectory &&
+    next.npcDirectory &&
+    next.npcDirectory.revision < old.npcDirectory.revision
+  )
+    return old;
+  if (
     old &&
     old.room.id === next.room.id &&
     old.turnSession &&
